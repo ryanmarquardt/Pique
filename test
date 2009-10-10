@@ -1,0 +1,22 @@
+#!/usr/bin/python
+
+import mcp.gstreamer.gstreamer as gst
+import traceback
+
+def g(uri,norm=False):
+	try:
+		print '-'*5, uri
+		for tag in sorted(gst.get_tags(uri, norm).items()):
+			print '%s:\t%s' % tag
+		print
+	except:
+		traceback.print_exc()
+	
+def f():
+	g('Music/Chaosphere/01 - Concatenation.mp4')
+	g('Music/Chaosphere/01 - Concatenation.mp3')
+	g('Music/Chaosphere/01 - Concatenation.mp3',True)
+	gst.main_quit()
+	return False
+gst.idle_add(f)
+gst.main()

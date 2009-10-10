@@ -1,0 +1,46 @@
+#!/usr/bin/python
+try:
+	import mcp.lirc
+	import mcp.client
+	import shlex
+	import sys
+	import time
+	import traceback
+
+	DEBUG=True
+
+	lirc = mcp.lirc.client('mcp')
+	mcp = mcp.client.client()
+	from xmlrpclib import Fault
+	commands = mcp.system.listMethods()
+	print commands
+
+	while lirc:
+		try:
+			command = lirc.read().split(';')
+			lines = []
+			for c in command:
+				c = shlex.split(c)
+				s = '%s(%s)' % (c[0], ",".join([repr(a) for a in c[1:]]))
+				lines.append(s)
+			for s in lines:
+			#if len(lines) == 1:
+				print s,
+				sys.stdout.flush()
+				eval('mcp.' + s)
+				print
+			
+		except Fault, f:
+			print
+			if f.faultCode != 1:
+				print f.faultCode
+			print f.faultString,
+		except KeyboardInterrupt:
+			break
+
+except:
+	print 'ERROR'
+	print traceback.format_exc()
+	#raw_input('Press enter to continue')
+	time.sleep(1)
+	exit(1)
