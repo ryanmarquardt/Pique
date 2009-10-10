@@ -1,0 +1,127 @@
+#Antec Fusion Volume Knob
+begin
+	prog = mcp
+	button = Vol+
+	repeat = 2
+	config = volume +1
+end
+begin
+	prog = mcp
+	button = Vol-
+	repeat = 2
+	config = volume -1
+end 
+
+begin
+	prog = mcp
+	button = UP
+	#repeat = 2
+	config = menu.up
+end
+begin
+	prog = mcp
+	button = DOWN
+	#repeat = 2
+	config = menu.down
+end
+begin
+	prog = mcp
+	button = DISPLAY
+	config = fullscreen
+end
+begin
+	prog = mcp
+	button = STOP
+	config = stop
+end
+begin
+	prog = mcp
+	button = MENU
+	config = menu.show
+end
+begin
+	prog = mcp
+	button = INFO
+	config = info
+end
+begin
+	prog = mcp
+	button = EXIT
+	config = menu.exit
+end
+begin
+	prog = mcp
+	button = LEFT
+	config = menu.left
+end
+begin
+	prog = mcp
+	button = RIGHT
+	config = menu.right
+end
+begin
+	prog = mcp
+	button = SELECT
+	config = menu.select
+end
+begin
+	prog = mcp
+	button = SKIP-
+	config = prev
+end
+begin
+	prog = mcp
+	button = SKIP+
+	config = next
+end
+begin
+	prog = mcp
+	button = REVERSE
+	config = seek -10
+end
+begin
+	prog = mcp
+	button = FORWARD
+	config = seek +30
+end
+begin
+	prog = mcp
+	button = PAUSE
+	config = pause
+end
+begin
+	prog = mcp
+	button = PLAY
+	config = play
+end
+begin
+	prog = mcp
+	button = BACK
+	config = menu.back
+end
+
+begin
+	prog = mcp
+	button = 1
+	config = playlist.new category=TV "series=Aqua Teen Hunger Force"; playlist_random 1; play
+end
+begin
+	prog = mcp
+	button = 2
+	config = playlist.new category=TV "series=Family Guy"; playlist_random 1; play
+end
+begin
+	prog = mcp
+	button = 3
+	config = playlist.new category=TV "series=Spongebob Squarepants"; playlist_random 1; play
+end
+begin
+	prog = mcp
+	button = 4
+	config = playlist.new artist=Meshuggah; playlist.random 1; play
+end
+begin
+	prog = mcp
+	button = 0
+	config = kill
+end
