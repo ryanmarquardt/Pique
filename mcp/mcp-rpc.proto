@@ -1,0 +1,23 @@
+message Request {
+	enum RequestType {
+		PING = 0;
+	}
+	optional RequestType Type = 1 [default = PING];
+	optional string Credentials = 2;
+	repeated string Arguments = 3;
+}
+
+message Response {
+	enum ErrorCode {
+		OK = 0;
+		UnknownCommand = 1;
+		BadCredentials = 2;
+		IncorrectArgs = 3;
+	}
+	optional ErrorCode Err = 1 [default = OK];
+	optional string Explanation = 2;
+}
+
+service mcp {
+	rpc Play (Request) returns (Response);
+}

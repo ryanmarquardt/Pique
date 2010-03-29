@@ -11,9 +11,52 @@ import sys
 import traceback
 import collections
 
-from mcp.types import ordered_dict, Song
-
-lib_entry = Song
+class ordered_dict(dict):
+	def __init__(self, new):
+		self.order = []
+		d = {}
+		for k, v in new:
+			d[k] = v
+			self.order.append(k)
+		dict.__init__(self,d)
+	def __getitem__(self, key):
+		if isinstance(key, str):
+			return dict.__getitem__(self, key)
+		elif isinstance(key, int):
+			return dict.__getitem__(self, self.order[key])
+		else:
+			raise TypeError, 'Expected str or int'
+	def get_key(self, index):
+		return self.order[index]
+	def __setitem__(self, key, value):
+		if dict.has_key(self, key):
+			if isinstance(key, str):
+				dict.__setitem__(self, key, value)
+			elif isinstance(key, int):
+				dict.__setitem__(self, self.order[key], value)
+		else:
+			raise KeyError
+	def __delitem__(self, key):
+		if isinstance(key, int):
+			i, key = key, dict.__getitem__(self, key)
+			del self.order[i]
+		elif isinstance(key, str):
+			self.order.remove(key)
+		dict.__delitem__(self, key)
+	def append(self, key, value):
+		dict.__setitem__(key, value)
+		self.order.append(key)
+	def extend(self, iterable):
+		for k, v in iterable:
+			self.append(k, v)
+	def remove(self, key):
+		del self[key]
+	def __iter__(self):
+		for k in self.order:
+			yield k, dict.__getitem__(self, k)
+	def __repr__(self):
+		return '{' + ', '.join(['%r: %r' % (k,v) for k, v in self]) + '}'
+	__str__ = __repr__
 
 _message_types = dict((2**i, gst.MessageType(2**i).first_value_nick) for i in range(22))
 
@@ -101,8 +144,8 @@ def Caps(caps=None, **kargs):
 	if caps is None:
 		caps = gst.Caps()
 	else:
-		print ', '.join([caps] + ['='.join(map(str,i)) for i in kargs.items()])
-		caps = gst.Caps(', '.join([caps] + ['='.join(map(str,i)) for i in kargs.items()]))
+		#print ', '.join([caps.to_string()] + ['='.join(map(str,i)) for i in kargs.items()])
+		caps = gst.Caps(', '.join([caps.to_string()] + ['='.join(map(str,i)) for i in kargs.items()]))
 	return caps
 	#caps.__len__ = caps.get_size
 	#del caps.get_size
@@ -116,7 +159,7 @@ class Buffer:
 		self.data = buff.data
 		
 	def __str__(self):
-		return '<Buffer %r of length %i>' % (self.caps, len(self.data))
+		return '<Buffer %r of length %i>' % (self.caps.to_string(), len(self.data))
 		
 	__repr__ = __str__
 		
@@ -314,7 +357,8 @@ def Message(msg):
 	elif msg.type & gst.MESSAGE_STATE_CHANGED:
 		return MessageStateChanged(msg)
 	else:
-		print 'Unknown message %s' % msg.type
+		pass
+		#print 'Unknown message %s' % msg.type
 		
 class MessageStateChanged(_Message):
 	name = 'state-changed'
@@ -433,7 +477,7 @@ class Pipeline(object_proxy, dict_proxy, object):
 	def connect(self, messages, callback, args=[], kargs={}):
 		for m in messages:
 			self.__cbs[m.name].append((callback, args, kargs))
-		print self.__cbs
+		#print self.__cbs
 		
 	def seek(self, new):
 		new = str(new)
@@ -462,29 +506,29 @@ class Pipeline(object_proxy, dict_proxy, object):
 	def get_state(self):
 		return self.__pipeline.get_state()[1].value_nick
 	def set_state(self, new, wait=False):
-		print 'set_state', new, "don't wait" if not wait else 'wait'
+		#print 'set_state', new, "don't wait" if not wait else 'wait'
 		if self.get_state() == new:
 			return
 		result = self.__pipeline.set_state(new)
-		print result
+		#print result
 		if result == gst.STATE_CHANGE_ASYNC and wait:
 			print 'waiting on async'
 			for e in self.messages():
-				print 'got message', e
+				#print 'got message', e
 				if isinstance(e, GstreamerError):
 					raise e
 				elif isinstance(e, MessageAsyncDone):
 					break
 		elif result == gst.STATE_CHANGE_FAILURE and wait:
-			print 'waiting on failure'
+			#print 'waiting on failure'
 			raise queue_get(self.__error)
 		else:
-			print 'not waiting'
+			#print 'not waiting'
 			return result == gst.STATE_CHANGE_SUCCESS
 	
 	def __sync_message_handler(self, bus, message):
 		m = Message(message)
-		print m
+		#print m
 		for q in self.__messages:
 			q.put(m)
 		if message.type == gst.MESSAGE_ELEMENT:
@@ -511,31 +555,46 @@ class Pipeline(object_proxy, dict_proxy, object):
 
 
 def get_tags(uri, normalize=False):
-		pipeline = Pipeline(Element('playbin'))
-		pipeline['video-sink'] = Element('fakesink')
-		if normalize:
-			pipeline['audio-sink'] = Bin('rganalysis','fakesink')
-		else:
-			pipeline['audio-sink'] = Element('fakesink')
-		if ':' not in uri:
-			uri = 'file://' + os.path.abspath(uri)
-		pipeline['uri'] = uri
-		print pipeline['async-handling']
-		tags = {}
+	pipeline = Pipeline(Element('playbin'))
+	pipeline['video-sink'] = Element('fakesink')
+	if normalize:
+		pipeline['audio-sink'] = Bin('rganalysis','fakesink')
+	else:
+		pipeline['audio-sink'] = Element('fakesink')
+	if ':' not in uri.partition('/')[0]:
+		uri = 'file://' + os.path.abspath(uri)
+	pipeline['uri'] = uri
+	#print pipeline['async-handling']
+	tags = {}
+	try:
+		pipeline.set_state('playing', wait=False)
+		for msg in pipeline.messages():
+			if not normalize and isinstance(msg, MessageAsyncDone):
+				break
+			elif isinstance(msg, MessageTag):
+				tags.update(msg)
+			elif isinstance(msg, MessageError):
+				raise msg.error
+		tags['duration'] = pipeline.duration
+	except Exception,e:
+		traceback.print_exc()
+	finally:
+		#pipeline._clear_message_queue()
+		pipeline.set_state('null')
+	return tags
+
+def gsub(func):
+	def f(*args):
 		try:
-			pipeline.set_state('playing', wait=False)
-			for msg in pipeline.messages():
-				if not normalize and isinstance(msg, MessageAsyncDone):
-					break
-				elif isinstance(msg, MessageTag):
-					tags.update(msg)
-				elif isinstance(msg, MessageError):
-					raise msg.error
-			tags['duration'] = pipeline.duration
+			func(*args)
+		except KeyboardInterrupt:
+			exit()
 		finally:
-			pipeline._clear_message_queue()
-			pipeline.set_state('null')
-		return tags
+			main_quit()
+	def g(*args):
+		gobject.idle_add(f,*args)
+		main()
+	return g
 
 __MainLoop = gobject.MainLoop()
 
@@ -548,8 +607,7 @@ def main_quit():
 idle_add = gobject.idle_add
 
 if __name__=='__main__':
+	@gsub
 	def f():
-		print get_tags('/home/ryan/Music/test.m4a')
-		main_quit()
-	gobject.idle_add(f)
-	main()
+		print get_tags('/home/ryan/Music/test.mp3')
+	f()
