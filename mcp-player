@@ -1,0 +1,30 @@
+#!/usr/bin/python
+
+from gstreamer import *
+
+import traceback
+
+class player(object):
+	def __init__(self):
+		self.pipeline = Pipeline(Element('playbin'))
+
+	@gsub
+	def play(self, uri):
+		self.pipeline['video-sink'] = Element('gconfvideosink')
+		self.pipeline['audio-sink'] = Bin('rgvolume','gconfaudiosink')
+		self.pipeline['uri'] = uri
+		try:
+			self.pipeline.set_state('playing', wait=False)
+			for msg in self.pipeline.messages():
+				if isinstance(msg, MessageError):
+					raise msg.error
+		except Exception,e:
+			traceback.print_exc()
+		finally:
+			self.pipeline.set_state('null')
+
+if __name__=='__main__':
+	p = player()
+	for uri in sys.stdin:
+		print uri[:-1]
+		p.play(uri[:-1])
