@@ -1,4 +1,4 @@
-#/usr/bin/python
+#!/usr/bin/env python
 
 import sqlite3
 import os.path
@@ -52,36 +52,40 @@ class library(object):
 		self.db.commit()
 		if VERBOSE: print "Successfully initialized library at %r" % self.path
 
-	@gsub
 	def add(self, uri):
-		uri = unicode(uri)
-		c = self.db.cursor()
-		print (SELECT_SQL + SEARCH_SQL % 'uri').replace('?',uri)
-		c.execute(SELECT_SQL + SEARCH_SQL % 'uri', (uri,))
-		if c.fetchone():
-			print >> sys.stderr, 'Skipping', uri
-		else:
-			if VERBOSE: print 'Adding', uri
-			tags = collections.defaultdict(lambda:None, get_tags(uri, True))
-			print '{\n\t%s\n}' % ',\n\t'.join(["%r: %r" % item for item in sorted(tags.items())])
-			if 'date' in tags:
-				tags['date'] = unicode(tags['date'])
-			NewRow = Row(
-				uri = uri,
-				title = tags['title'],
-				artist = tags['artist'],
-				album = tags['album'],
-				date = tags['date'],
-				track_number = tags['track-number'],
-				peak = tags['replaygain-track-peak'],
-				gain = tags['replaygain-track-gain'],
-				reference_level = tags['replaygain-reference-level'],
-				audio_codec = tags['audio-codec'],
-				duration = tags['duration'],
-			)
-			print NewRow
-			c.execute(INSERT_SQL, NewRow)
-			self.db.commit()
+		self.addmany((uri,))
+
+	@gsub
+	def addmany(self, uris):
+		for uri in uris:
+			uri = unicode(uri)
+			c = self.db.cursor()
+			print (SELECT_SQL + SEARCH_SQL % 'uri').replace('?',uri)
+			c.execute(SELECT_SQL + SEARCH_SQL % 'uri', (uri,))
+			if c.fetchone():
+				print >> sys.stderr, 'Skipping', uri
+			else:
+				if VERBOSE: print 'Adding', uri
+				tags = collections.defaultdict(lambda:None, get_tags(uri, True))
+				print '{\n\t%s\n}' % ',\n\t'.join(["%r: %r" % item for item in sorted(tags.items())])
+				if 'date' in tags:
+					tags['date'] = unicode(tags['date'])
+				NewRow = Row(
+					uri = uri,
+					title = tags['title'],
+					artist = tags['artist'],
+					album = tags['album'],
+					date = tags['date'],
+					track_number = tags['track-number'],
+					peak = tags['replaygain-track-peak'],
+					gain = tags['replaygain-track-gain'],
+					reference_level = tags['replaygain-reference-level'],
+					audio_codec = tags['audio-codec'],
+					duration = tags['duration'],
+				)
+				print NewRow
+				c.execute(INSERT_SQL, NewRow)
+				self.db.commit()
 
 	def remove(self, id):
 		c = self.db.cursor()
@@ -112,13 +116,15 @@ if __name__=='__main__':
 	if sys.argv[1] == 'init':
 		l.init()
 	elif sys.argv[1] == 'add':
+		uris = []
 		for i in sys.argv[2:]:
 			if os.path.isdir(i):
 				for root,dirs,files in os.walk(i):
 					for f in files:
-						l.add(os.path.join(root,f))
+						uris.append(uri((os.path.join(root,f))))
 			else:
-				l.add(i)
+				uris.append(uri(i))
+		l.addmany(uris)
 	elif sys.argv[1] == 'list':
 		if len(sys.argv) < 3:
 			for index, row in l:
@@ -126,6 +132,9 @@ if __name__=='__main__':
 		else:
 			for row in l.members(sys.argv[2]):
 				print row
+	elif sys.argv[1] == 'edit':
+		id = sys.argv[2]
+		
 	elif sys.argv[1] == 'find':
 		pass
 	else:

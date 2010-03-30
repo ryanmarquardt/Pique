@@ -553,35 +553,43 @@ class Pipeline(object_proxy, dict_proxy, object):
 		self.set_state('null')
 		self.bus.remove_signal_watch()
 
-
 def get_tags(uri, normalize=False):
+	for tags in get_tags_many((uri,), normalize):
+		return tags
+
+def uri(path):
+	if ':' not in path.partition('/')[0]:
+		return 'file://' + os.path.abspath(path)
+	else:
+		return path
+
+def get_tags_many(uris, normalize=False):
 	pipeline = Pipeline(Element('playbin'))
 	pipeline['video-sink'] = Element('fakesink')
 	if normalize:
 		pipeline['audio-sink'] = Bin('rganalysis','fakesink')
 	else:
 		pipeline['audio-sink'] = Element('fakesink')
-	if ':' not in uri.partition('/')[0]:
-		uri = 'file://' + os.path.abspath(uri)
-	pipeline['uri'] = uri
-	#print pipeline['async-handling']
-	tags = {}
 	try:
-		pipeline.set_state('playing', wait=False)
-		for msg in pipeline.messages():
-			if not normalize and isinstance(msg, MessageAsyncDone):
-				break
-			elif isinstance(msg, MessageTag):
-				tags.update(msg)
-			elif isinstance(msg, MessageError):
-				raise msg.error
-		tags['duration'] = pipeline.duration
+		for uri in uris:
+			pipeline['uri'] = uri
+			tags = {}
+			pipeline.set_state('playing', wait=False)
+			for msg in pipeline.messages():
+				if not normalize and isinstance(msg, MessageAsyncDone):
+					break
+				elif isinstance(msg, MessageTag):
+					tags.update(msg)
+				elif isinstance(msg, MessageError):
+					raise msg.error
+				elif isinstance(msg, MessageEos):
+					break
+			tags['duration'] = pipeline.duration
+			yield tags
 	except Exception,e:
 		traceback.print_exc()
 	finally:
-		#pipeline._clear_message_queue()
 		pipeline.set_state('null')
-	return tags
 
 def gsub(func):
 	def f(*args):
