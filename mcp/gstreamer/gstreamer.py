@@ -553,25 +553,24 @@ class Pipeline(object_proxy, dict_proxy, object):
 		self.set_state('null')
 		self.bus.remove_signal_watch()
 
-def get_tags(uri, normalize=False):
-	for tags in get_tags_many((uri,), normalize):
-		return tags
-
 def uri(path):
 	if ':' not in path.partition('/')[0]:
 		return 'file://' + os.path.abspath(path)
 	else:
 		return path
 
-def get_tags_many(uris, normalize=False):
-	pipeline = Pipeline(Element('playbin'))
-	pipeline['video-sink'] = Element('fakesink')
-	if normalize:
-		pipeline['audio-sink'] = Bin('rganalysis','fakesink')
-	else:
-		pipeline['audio-sink'] = Element('fakesink')
-	try:
-		for uri in uris:
+class tag_reader(object):
+	def __init__(self, normalize=False):
+		self.pipeline = Pipeline(Element('playbin'))
+		self.pipeline = Pipeline(Element('playbin'))
+		self.pipeline['video-sink'] = Element('fakesink')
+		if normalize:
+			self.pipeline['audio-sink'] = Bin('rganalysis','fakesink')
+		else:
+			self.pipeline['audio-sink'] = Element('fakesink')
+
+	def __call__(self, uri):
+		try:
 			pipeline['uri'] = uri
 			tags = {}
 			pipeline.set_state('playing', wait=False)
@@ -585,11 +584,14 @@ def get_tags_many(uris, normalize=False):
 				elif isinstance(msg, MessageEos):
 					break
 			tags['duration'] = pipeline.duration
-			yield tags
-	except Exception,e:
-		traceback.print_exc()
-	finally:
-		pipeline.set_state('null')
+		except Exception,e:
+			traceback.print_exc()
+		finally:
+			pipeline.set_state('null')
+		return tags
+
+def get_tags(uri, normalize=False):
+	return tag_reader(normalize)(uri)
 
 def gsub(func):
 	def f(*args):
