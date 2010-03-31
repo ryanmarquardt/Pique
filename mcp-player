@@ -1,22 +1,29 @@
 #!/usr/bin/python
 
 from gstreamer import *
+import library
 
 import traceback
 
 class player(object):
 	def __init__(self):
 		self.pipeline = Pipeline(Element('playbin'))
+		self.lib = library.library(library.DEFAULT_PATH)
 
 	@gsub
-	def play(self, uri):
-		self.pipeline['video-sink'] = Element('gconfvideosink')
-		self.pipeline['audio-sink'] = Bin('rgvolume','gconfaudiosink')
-		self.pipeline['uri'] = uri
+	def play(self, index):
 		try:
+			tags = self.lib[index]._asdict()
+			taginject = Element('taginject')
+			taginject.props.tags = 'replaygain-reference-level=%s,replaygain-track-gain=%s,replaygain-track-peak=%s' % (tags['reference_level'], tags['gain'], tags['peak'])
+			self.pipeline['video-sink'] = Element('gconfvideosink')
+			self.pipeline['audio-sink'] = Bin(taginject,'rgvolume','gconfaudiosink')
+			self.pipeline['uri'] = tags['uri']
+			print self.pipeline['uri']
 			self.pipeline.set_state('playing', wait=False)
 			for msg in self.pipeline.messages():
 				if isinstance(msg, MessageError):
+					print msg.error
 					raise msg.error
 		except Exception,e:
 			traceback.print_exc()

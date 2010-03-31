@@ -111,7 +111,7 @@ class library(object):
 	def __getitem__(self, index):
 		c = self.db.cursor()
 		c.execute('select * from %s where rowid=?' % TABLE_NAME, (index,))
-		return c.fetchone()
+		return Row._make(c.fetchone())
 
 if __name__=='__main__':
 	import sys
