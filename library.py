@@ -57,16 +57,16 @@ class library(object):
 
 	@gsub
 	def addmany(self, uris):
+		tagger = tag_reader()
 		for uri in uris:
 			uri = unicode(uri)
 			c = self.db.cursor()
-			print (SELECT_SQL + SEARCH_SQL % 'uri').replace('?',uri)
 			c.execute(SELECT_SQL + SEARCH_SQL % 'uri', (uri,))
 			if c.fetchone():
 				print >> sys.stderr, 'Skipping', uri
 			else:
 				if VERBOSE: print 'Adding', uri
-				tags = collections.defaultdict(lambda:None, get_tags(uri, True))
+				tags = collections.defaultdict(lambda:None, tagger(uri))
 				print '{\n\t%s\n}' % ',\n\t'.join(["%r: %r" % item for item in sorted(tags.items())])
 				if 'date' in tags:
 					tags['date'] = unicode(tags['date'])
@@ -107,6 +107,11 @@ class library(object):
 
 	def filter(self, *criteria):
 		c = self.db.cursor()
+
+	def __getitem__(self, index):
+		c = self.db.cursor()
+		c.execute('select * from %s where rowid=?' % TABLE_NAME, (index,))
+		return c.fetchone()
 
 if __name__=='__main__':
 	import sys
