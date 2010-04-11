@@ -20,7 +20,12 @@ class VideoWidget(gtk.DrawingArea):
 constructor: VideoWidget(self, gst, ...)
 returns a gtk.DrawingArea which is set as the target xwindow for gst.
 """
-	def __init__(self, gst, *args, **kargs):
+	def __init__(self, sink, *args, **kargs):
 		gtk.DrawingArea.__init__(self, *args, **kargs)
-		gst.xid_source = self
+		gtk.DrawingArea.connect(self, 'realize', self._realized)
+		self._sink = sink
+
+	def _realized(self, sender):
+		self._sink.set_xwindow_id(self.window.xid)
+		return True
 

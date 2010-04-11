@@ -506,24 +506,24 @@ class Pipeline(object_proxy, dict_proxy, object):
 	def get_state(self):
 		return self.__pipeline.get_state()[1].value_nick
 	def set_state(self, new, wait=False):
-		#print 'set_state', new, "don't wait" if not wait else 'wait'
+		print 'set_state', new, "don't wait" if not wait else 'wait'
 		if self.get_state() == new:
 			return
 		result = self.__pipeline.set_state(new)
-		#print result
+		print result
 		if result == gst.STATE_CHANGE_ASYNC and wait:
 			print 'waiting on async'
 			for e in self.messages():
-				#print 'got message', e
+				print 'got message', e
 				if isinstance(e, GstreamerError):
 					raise e
 				elif isinstance(e, MessageAsyncDone):
 					break
 		elif result == gst.STATE_CHANGE_FAILURE and wait:
-			#print 'waiting on failure'
+			print 'waiting on failure'
 			raise queue_get(self.__error)
 		else:
-			#print 'not waiting'
+			print 'not waiting'
 			return result == gst.STATE_CHANGE_SUCCESS
 	
 	def __sync_message_handler(self, bus, message):

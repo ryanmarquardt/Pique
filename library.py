@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sqlite3
+import re
 import os.path
 import collections
 
@@ -9,7 +10,7 @@ VERBOSE = True
 DEFAULT_PATH = os.path.expanduser('~/.mcp-library')
 
 COLUMNS = [
-	('uri','text'),
+	('uri','text unique on conflict replace'),
 	('title','text'),
 	('artist','text'),
 	('album','text'),
@@ -112,6 +113,17 @@ class library(object):
 		c = self.db.cursor()
 		c.execute('select * from %s where rowid=?' % TABLE_NAME, (index,))
 		return Row._make(c.fetchone())
+
+	def index(self, uri):
+		c = self.db.cursor()
+		c.execute('select rowid from %s where uri=?' % TABLE_NAME, (uri,))
+		try:
+			return c.fetchone()[0]
+		except TypeError:
+			raise ValueError("library.index(uri): uri not in library")
+
+def uri(path):
+	return 'file://' + os.path.abspath(path) if re.match('[a-zA-Z]+://.*', path) is None else path
 
 if __name__=='__main__':
 	import sys
