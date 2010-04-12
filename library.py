@@ -112,7 +112,11 @@ class library(object):
 	def __getitem__(self, index):
 		c = self.db.cursor()
 		c.execute('select * from %s where rowid=?' % TABLE_NAME, (index,))
-		return Row._make(c.fetchone())
+		r = c.fetchone()
+		if r is None:
+			raise IndexError('library[%i]: no such entry' % index)
+		else:
+			return Row._make(r)
 
 	def index(self, uri):
 		c = self.db.cursor()
