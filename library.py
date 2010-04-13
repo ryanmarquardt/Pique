@@ -127,7 +127,7 @@ class library(object):
 			raise ValueError("library.index(uri): uri not in library")
 
 def uri(path):
-	return 'file://' + os.path.abspath(path) if re.match('[a-zA-Z]+://.*', path) is None else path
+	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://%s' % os.path.abspath(path)
 
 if __name__=='__main__':
 	import sys

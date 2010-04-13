@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 DEBUG = True
+def debug(*args):
+	if DEBUG:
+		print ' '.join(map(str,args))
 
 import sys, os
 import pygtk, gtk, gobject
@@ -52,6 +55,9 @@ class MediaButtons(gtk.VBox):
 		self.pos.add(gtk.HScale(self.position))
 		self.toolbar.insert(self.pos, -1)
 		
+		self.fullscreen = gtk.ToggleToolButton(gtk.STOCK_FULLSCREEN)
+		self.toolbar.insert(self.fullscreen, -1)
+		
 		self.pack_start(self.toolbar, expand=True, fill=True)
 		
 	def connect(self, which, func, *extra):
@@ -67,8 +73,14 @@ class MediaButtons(gtk.VBox):
 			self.previous.connect('clicked', func, *extra)
 		elif which == 'position':
 			self.position.connect('value-changed', func, *extra)
+		elif which == 'fullscreen':
+			self.fullscreen.connect('clicked', func, *extra)
 		else:
-			gtk.HButtonBox.connect(self, which, func, *extra)
+			gtk.VBox.connect(self, which, func, *extra)
+			
+	def set_duration(self, dur):
+		print repr(dur)
+		self.position.set_upper(float(dur))
 
 class Main(object):
 	def __init__(self, files):
@@ -77,21 +89,22 @@ class Main(object):
 		self.win = gtk.Window(gtk.WINDOW_TOPLEVEL)
 		self.win.set_title('Video-Player')
 		self.win.set_default_size(500, 400)
-		self.win.connect('destroy', self.on_destroy, 'WM destroy')
+		self.win.connect('destroy', self.on_destroy)
 		vbox = gtk.VBox()
 		self.win.add(vbox)
 		
-		buttons = MediaButtons()
-		buttons.connect('play', lambda b:self.play())
-		buttons.connect('pause', lambda b:self.pause())
-		buttons.connect('stop', lambda b:self.stop())
-		buttons.connect('next', lambda b:self.next())
-		buttons.connect('previous', lambda b:self.previous())
-		buttons.connect('position', lambda a:self.seek(a.value, absolute=True, percent=False))
+		self.buttons = MediaButtons()
+		self.buttons.connect('play', lambda b:self.play())
+		self.buttons.connect('pause', lambda b:self.pause())
+		self.buttons.connect('stop', lambda b:self.stop())
+		self.buttons.connect('next', lambda b:self.next())
+		self.buttons.connect('previous', lambda b:self.previous())
+		self.buttons.connect('position', lambda a:self.seek(a.value, absolute=True, percent=False))
+		self.buttons.connect('fullscreen', lambda b:self.fullscreen() if b.get_active() else self.unfullscreen())
 		
 		self.movie_window = gtk.DrawingArea()
 		vbox.pack_start(self.movie_window, True, True)
-		vbox.pack_start(buttons, False, False)
+		vbox.pack_start(self.buttons, False, False)
 		self.win.show_all()
 
 		self.player = gst.element_factory_make('playbin2', 'player')
@@ -114,46 +127,73 @@ class Main(object):
 		bus.enable_sync_message_emission()
 		bus.connect('message::eos', self.on_eos)
 		bus.connect('message::error', self.on_error)
+		bus.connect('message::tag', self.on_tag)
+		bus.connect('message::duration', self.on_duration)
+		bus.connect('message', self.on_message)
 		
 		self.on_about_to_finish(self.player)
 		self.play()
 		
 	def seek(self, new, absolute=True, percent=False):
-		format = gst.SEEK_TYPE_SET if absolute else gst.SEEK_TYPE_CUR
-		if percent:
-			new *= self.player.get_duration()
-			
-		self.player.seek_simple(format, gst.SEEK_FLAG_NONE, new)
+		debug('seek', new, absolute, percent)
+		format = gst.FORMAT_TIME if absolute else gst.FORMAT_PERCENT
+		if absolute and percent:
+			self.player.seek_simple(gst.FORMAT_PERCENT, gst.SEEK_FLAG_NONE, new)
+		elif absolute and not percent:
+			self.player.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_NONE, new)
+		elif not absolute and percent:
+			self.player.seek_simple(gst.FORMAT_PERCENT, gst.SEEK_FLAG_NONE, 
+			 self.get_position(percent=True) + new)
+		elif not absolute and not percent:
+			self.player.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_NONE, 
+			 self.get_position(percent=False) + new)
+		#self.player.seek_simple(format, gst.SEEK_FLAG_NONE, new)
 
 	def play(self):
-		if DEBUG: print 'play'
+		debug('play')
 		self.player.set_state('playing')
 		
 	def pause(self):
-		if DEBUG: print 'pause'
+		debug('pause')
 		self.player.set_state('paused')
 		
 	def stop(self):
-		if DEBUG: print 'stop'
+		debug('stop')
 		self.player.set_state('null')
 		
-	def previous(self):
-		if DEBUG: print 'previous'
-		pass
+	def fullscreen(self):
+		self.win.fullscreen()
 		
-	def next(self, *args):
-		if DEBUG: print 'next'
+	def unfullscreen(self):
+		self.win.unfullscreen()
+		
+	def get_position(self, percent=False):
+		return self.player.query_position(gst.FORMAT_PERCENT if percent else gst.FORMAT_TIME)
+		
+	def get_duration(self):
+		return self.player.query_duration(gst.FORMAT_TIME)
+		
+	def previous(self):
+		debug('previous')
 		self.stop()
-		self.load_next()
+		if self.get_position() < 3 * gst.SECOND:
+			try:
+				self.load(self.playlist.previous())
+			except StopIteration:
+				pass
 		self.play()
 		
-	def load_next(self):
-		if DEBUG: print 'load_next'
+	def next(self):
+		debug('next')
+		self.stop()
 		try:
-			uri = self.playlist.next()
+			self.load(self.playlist.next())
 		except StopIteration:
-			self.stop()
-			return
+			pass
+		self.play()
+			
+	def load(self, uri):
+		debug('load', uri)
 		index = self.lib.index(uri)
 		tags = self.lib[index]._asdict()
 		self.player.set_property('uri', uri)
@@ -164,7 +204,18 @@ class Main(object):
 		gtk.main_quit()
 		
 	def on_about_to_finish(self, player):
-		self.load_next()
+		try:
+			self.load(self.playlist.next())
+		except StopIteration:
+			pass
+		
+	def on_tag(self, bus, message):
+		#debug('tag')
+		for k in message.structure.keys():
+			print k, '=', message.structure[k]
+		
+	def on_duration(self, bus, message):
+		self.buttons.set_duration(self.get_duration())
 			
 	def on_eos(self, bus, message):
 		self.stop()
@@ -173,6 +224,11 @@ class Main(object):
 		self.stop()
 		err, debug = message.parse_error()
 		print "Error: %s" % err, debug
+		
+	def on_message(self, bus, message):
+		if message.type != gst.MESSAGE_STATE_CHANGED:
+			pass
+			#print message
 		
 	def on_destroy(self, *args):
 		self.quit()
@@ -208,7 +264,7 @@ if __name__=='__main__':
 	options, args = parser.parse_args()
 
 	for a in args:
-		p.append(a)
+		p.append(library.uri(a))
 
 	m = Main(p)
 	gtk.gdk.threads_init()
