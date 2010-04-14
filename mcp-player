@@ -35,50 +35,34 @@ class MediaButtons(gtk.VBox):
 		self.toolbar.set_orientation(gtk.ORIENTATION_HORIZONTAL)
 		self.toolbar.set_show_arrow(False)
 		
-		self.play = gtk.ToolButton(gtk.STOCK_MEDIA_PLAY)
-		self.toolbar.insert(self.play, -1)
-		
-		self.pause = gtk.ToolButton(gtk.STOCK_MEDIA_PAUSE)
-		self.toolbar.insert(self.pause, -1)
-		
-		self.stop = gtk.ToolButton(gtk.STOCK_MEDIA_STOP)
-		self.toolbar.insert(self.stop, -1)
-		
-		self.previous = gtk.ToolButton(gtk.STOCK_MEDIA_PREVIOUS)
-		self.toolbar.insert(self.previous, -1)
-		
-		self.next = gtk.ToolButton(gtk.STOCK_MEDIA_NEXT)
-		self.toolbar.insert(self.next, -1)
+		self.widgets = {}
+		for name,stock in (
+			 ('play',gtk.STOCK_MEDIA_PLAY),
+			 ('pause', gtk.STOCK_MEDIA_PAUSE),
+			 ('stop',gtk.STOCK_MEDIA_STOP),
+			 ('previous',gtk.STOCK_MEDIA_PREVIOUS),
+			 ('next',gtk.STOCK_MEDIA_NEXT),):
+			self.widgets[name] = gtk.ToolButton(stock)
+			self.toolbar.insert(self.widgets[name], -1)
 		
 		self.position = gtk.Adjustment(step_incr=15*gst.SECOND,page_incr=60*gst.SECOND)
 		self.pos = gtk.ToolItem()
 		self.pos.set_expand(True)
 		self.slider = gtk.HScale(self.position)
 		self.slider.connect('format-value', self.format_time)
-		
 		self.pos.add(self.slider)
 		self.toolbar.insert(self.pos, -1)
 		
-		self.fullscreen = gtk.ToggleToolButton(gtk.STOCK_FULLSCREEN)
-		self.toolbar.insert(self.fullscreen, -1)
+		self.widgets['fullscreen'] = gtk.ToggleToolButton(gtk.STOCK_FULLSCREEN)
+		self.toolbar.insert(self.widgets['fullscreen'], -1)
 		
 		self.pack_start(self.toolbar, expand=True, fill=True)
 		
 	def connect(self, which, func, *extra):
-		if which == 'play':
-			self.play.connect('clicked', func, *extra)
-		elif which == 'pause':
-			self.pause.connect('clicked', func, *extra)
-		elif which == 'stop':
-			self.stop.connect('clicked', func, *extra)
-		elif which == 'next':
-			self.next.connect('clicked', func, *extra)
-		elif which == 'previous':
-			self.previous.connect('clicked', func, *extra)
+		if which in ('play','pause','stop','previous','next','fullscreen'):
+			self.widgets[which].connect('clicked', func, *extra)
 		elif which == 'position':
 			self.slider.connect('change-value', func, *extra)
-		elif which == 'fullscreen':
-			self.fullscreen.connect('clicked', func, *extra)
 		else:
 			gtk.VBox.connect(self, which, func, *extra)
 			
@@ -100,7 +84,6 @@ class MediaButtons(gtk.VBox):
 		
 	def set_position(self, pos):
 		self.position.set_value(pos)
-		self.position.value_changed()
 
 class Main(object):
 	def __init__(self, files):
@@ -135,7 +118,8 @@ class Main(object):
 		self.player.set_property('audio-sink', audio_bin)
 		
 		video_sink = Element('xvimagesink')
-		video_sink.set_xwindow_id(self.movie_window.window.xid)
+		self.movie_window.connect('expose-event', self.on_expose_event, video_sink)
+		#video_sink.set_xwindow_id(self.movie_window.window.xid)
 		video_sink.set_property('force-aspect-ratio', True)
 		self.player.set_property('video-sink', video_sink)
 		self.player.set_property('vis-plugin', Element('goom2k1'))
@@ -219,6 +203,7 @@ class Main(object):
 		index = self.lib.index(uri)
 		tags = self.lib[index]._asdict()
 		self.player.set_property('uri', uri)
+		self.player.get_property('video_sink').set_xwindow_id(self.movie_window.window.xid)
 		self.taginject.props.tags = 'replaygain-reference-level=%s,replaygain-track-gain=%s,replaygain-track-peak=%s' % (tags['reference_level'], tags['gain'], tags['peak'])
 		
 	def quit(self):
@@ -227,26 +212,24 @@ class Main(object):
 		
 	def update(self):
 		try:
-			d = self.get_duration()
-		except:
-			pass
-			#debug('Failed to get duration')
-		else:
-			self.buttons.set_duration(d)
-		try:
+			sys.stdout.write('.')
+			sys.stdout.flush()
 			p = self.get_position()
-		except:
-			pass
-			#debug('Failed to get position')
-		else:
 			self.buttons.set_position(p)
-		return True
+			d = self.get_duration()
+			self.buttons.set_duration(d)
+		finally:
+			return True
 		
 	def on_about_to_finish(self, player):
 		try:
 			self.load(self.playlist.next())
 		except StopIteration:
 			pass
+			
+	def on_expose_event(self, window, event, sink):
+		print window.window.xid
+		sink.set_xwindow_id(window.window.xid)
 		
 	def on_tag(self, bus, message):
 		#debug('tag')
@@ -295,7 +278,8 @@ if __name__=='__main__':
 	callback=my_callback, action="callback", type="string",
 	help="Include all songs in GENRE in the playlist")
 	
-	sys.argv = ['mcp-library','file:///home/ryan/Videos/Family Guy/4.01 North by North Quahog.avi']
+	sys.argv = ['mcp-library'] + \
+	['file:///home/ryan/Videos/Family Guy/%s' % f for f in os.listdir('/home/ryan/Videos/Family Guy')]
 
 	options, args = parser.parse_args()
 
