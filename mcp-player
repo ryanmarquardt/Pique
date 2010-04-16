@@ -33,59 +33,70 @@ def Bin(*elements):
 					j+=1
 	return bin
 	
-class IOThread(threading.Thread):
-	def __init__(self, main):
-		threading.Thread.__init__(self)
+class BgThread(threading.Thread):
+	def __init__(self, *args, **kwargs):
+		threading.Thread.__init__(self, target=self.main, args=args, kwargs=kwargs)
 		self.daemon = True
-		self.main = main
 		
-class PlayThread(threading.Thread):
-	def __init__(self, main):
-		threading.Thread.__init__(self)
-		self.daemon = True
-		self.main = main
+class IOThread(BgThread):
+	def main(self):
+		pass
 		
-	def run(self):
+class PlayThread(BgThread):
+	def main(self, gui):
 		while True:
-			self.main.update()
-			time.sleep(1)
-		
+			gui.update()
+			time.sleep(0.1)
+			
+def time_from_ns(ns):
+	m,s = divmod(ns/gst.SECOND, 60)
+	h,m = divmod(m,60)
+	return '%d:%02d:%02d' % (h,m,s) if h else '%d:%02d' % (m,s)
+	
 class MediaButtons(gtk.VBox):
 	def __init__(self):
 		gtk.VBox.__init__(self)
 		self.toolbar = gtk.Toolbar()
+		self.toolbar.unset_flags(gtk.CAN_FOCUS)
 		self.toolbar.set_orientation(gtk.ORIENTATION_HORIZONTAL)
 		self.toolbar.set_show_arrow(False)
 		
 		self.widgets = {}
 		for name,stock in (
-			 ('play',gtk.STOCK_MEDIA_PLAY),
-			 ('pause', gtk.STOCK_MEDIA_PAUSE),
+			 ('play-pause',gtk.STOCK_MEDIA_PLAY),
 			 ('stop',gtk.STOCK_MEDIA_STOP),
 			 ('previous',gtk.STOCK_MEDIA_PREVIOUS),
 			 ('next',gtk.STOCK_MEDIA_NEXT),):
 			self.widgets[name] = gtk.ToolButton(stock)
 			self.toolbar.insert(self.widgets[name], -1)
+			self.widgets[name].get_child().unset_flags(gtk.CAN_FOCUS)
 		
 		self.position = gtk.Adjustment(step_incr=15*gst.SECOND,page_incr=60*gst.SECOND)
-		self.pos = gtk.ToolItem()
-		self.pos.set_expand(True)
-		self.slider = gtk.HScale(self.position)
-		#self.slider.set_update_policy(gtk.UPDATE_CONTINUOUS)
-		self.slider.connect('format-value', self.format_time)
-		self.pos.add(self.slider)
-		self.toolbar.insert(self.pos, -1)
+		self.slider = gtk.ToolItem()
+		self.slider.set_expand(True)
+		self.slider.add(gtk.HScale(self.position))
+		self.slider.get_child().connect('format-value', self.format_time)
+		self.slider.get_child().unset_flags(gtk.CAN_FOCUS)
+		self.toolbar.insert(self.slider, -1)
+		
+		self.volume = gtk.ToolItem()
+		self.volume.add(gtk.VolumeButton())
+		self.volume.get_child().unset_flags(gtk.CAN_FOCUS)
+		self.toolbar.insert(self.volume, -1)
 		
 		self.widgets['fullscreen'] = gtk.ToggleToolButton(gtk.STOCK_FULLSCREEN)
 		self.toolbar.insert(self.widgets['fullscreen'], -1)
+		self.widgets['fullscreen'].get_child().unset_flags(gtk.CAN_FOCUS)
 		
 		self.pack_start(self.toolbar, expand=True, fill=True)
 		
 	def connect(self, which, func, *extra):
-		if which in ('play','pause','stop','previous','next','fullscreen'):
+		if which in ('play-pause','stop','previous','next','fullscreen'):
 			self.widgets[which].connect('clicked', func, *extra)
 		elif which == 'position':
-			self.slider.connect('change-value', func, *extra)
+			self.slider.get_child().connect('change-value', func, *extra)
+		elif which == 'volume':
+			self.volume.get_child().connect('value-changed', func, *extra)
 		else:
 			gtk.VBox.connect(self, which, func, *extra)
 			
@@ -94,48 +105,68 @@ class MediaButtons(gtk.VBox):
 		if TIME_FORMAT == 'percent':
 			return "%2d%%" % (100 * pos / dur)
 		elif TIME_FORMAT == 'hms':
-			m,s = divmod(pos/gst.SECOND, 60)
-			h,m = divmod(m,60)
-			dm,ds = divmod(dur/gst.SECOND, 60)
-			dh,dm = divmod(dm,60)
-			return "%01d:%02d:%02d / %01d:%02d:%02d" % (h,m,s,dh,dm,ds)
-			
+			return ' / '.join([time_from_ns(x) for x in (pos,dur)])
+		
 	def set_duration(self, dur):
 		self.position.set_upper(float(dur))
 		
 	def set_position(self, pos):
 		self.position.set_value(pos)
+		
+	def set_volume(self, vol):
+		self.volume.get_child().set_value(vol)
 
 class Main(object):
 	def __init__(self, files):
 		self.lib = library.library(library.DEFAULT_PATH)
-
+		
+		def add_accel(accel, func, *args):
+			key, mod = gtk.accelerator_parse(accel)
+			debug(accel, key, mod, func.__name__, args)
+			self.accelgroup.connect_group(key, mod, gtk.ACCEL_VISIBLE,
+			  lambda g,w,k,m:(func(*args),))
+		
+		self.accelgroup = gtk.AccelGroup()
+		add_accel('F11', self.toggle_fullscreen)
+		add_accel('f', self.toggle_fullscreen)
+		add_accel('n', self.next)
+		add_accel('space', self.play_pause)
+		add_accel('Escape', self.stop)
+		add_accel('p', self.previous)
+		add_accel('c', self.toggle_controls)
+		add_accel('Left', self.seek, -15, False, False)
+		add_accel('Right', self.seek, 15, False, False)
+		
 		self.win = gtk.Window(gtk.WINDOW_TOPLEVEL)
+		self.win.add_accel_group(self.accelgroup)
 		self.win.set_title('Video-Player')
 		self.win.set_default_size(500, 400)
 		self.win.connect('destroy', self.on_destroy)
+		self.win.__fullscreen = False
+		self.win.connect('window-state-event', self.on_window_state_event)
 		vbox = gtk.VBox()
 		self.win.add(vbox)
 		
 		self.buttons = MediaButtons()
-		self.buttons.connect('play', lambda b:self.play())
-		self.buttons.connect('pause', lambda b:self.pause())
+		self.buttons.connect('play-pause', lambda b:self.play_pause())
+		#self.buttons.connect('pause', lambda b:self.pause())
 		self.buttons.connect('stop', lambda b:self.stop())
 		self.buttons.connect('next', lambda b:self.next())
 		self.buttons.connect('previous', lambda b:self.previous())
 		self.buttons.connect('position', lambda a,t,v:self.seek(v, absolute=True, percent=False))
+		self.buttons.connect('volume', lambda b,v:self.set_volume(v))
 		self.buttons.connect('fullscreen', lambda b:self.fullscreen() if b.get_active() else self.unfullscreen())
 		
 		self.movie_window = gtk.DrawingArea()
+		self.movie_window.set_flags(gtk.CAN_FOCUS)
 		self.movie_window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color(0,0,0))
-		self.movie_window.connect('button-release-event', lambda w,e:(sys.stdout.write(str(e)),sys.stdout.flush()))
-		#self.movie_window.connect('button-press-event', lambda w,e:(not self.show_controls()))
 		vbox.pack_start(self.movie_window, True, True)
 		vbox.pack_start(self.buttons, False, False)
 		self.win.show_all()
 
 		self.player = gst.element_factory_make('playbin2', 'player')
-		self.player.connect('about-to-finish', self.on_about_to_finish)
+		self.player.__playing = False
+		#self.player.connect('about-to-finish', self.on_about_to_finish)
 
 		self.taginject = Element('taginject')
 		audio_bin = Bin(self.taginject, Element('rgvolume'), Element('gconfaudiosink'))
@@ -143,7 +174,6 @@ class Main(object):
 		
 		video_sink = Element('xvimagesink')
 		self.movie_window.connect('expose-event', self.on_expose_event, video_sink)
-		#video_sink.set_xwindow_id(self.movie_window.window.xid)
 		video_sink.set_property('force-aspect-ratio', True)
 		self.player.set_property('video-sink', video_sink)
 		self.player.set_property('vis-plugin', Element('goom2k1'))
@@ -155,13 +185,18 @@ class Main(object):
 		bus.enable_sync_message_emission()
 		bus.connect('message::eos', self.on_eos)
 		bus.connect('message::error', self.on_error)
+		bus.connect('message::state-changed', self.on_state_changed)
 		#bus.connect('message::tag', self.on_tag)
 		
-		IOThread(self).start()
+		IOThread().start()
 		PlayThread(self).start()
 		
-		self.on_about_to_finish(self.player)
+		self.buttons.set_volume(0.8)
+		self.load(self.playlist.next())
 		self.play()
+		
+		def printcurthread(*args):
+			print threading.currentThread()
 		
 		signal.signal(signal.SIGINT, lambda s,f: self.quit())
 		
@@ -173,6 +208,12 @@ class Main(object):
 		else:
 			self.player.seek_simple(gst.FORMAT_PERCENT, gst.SEEK_FLAG_FLUSH, 
 			 self.get_position(percent=percent) + new)
+			 
+	def play_pause(self):
+		if self.player.__playing:
+			self.pause()
+		else:
+			self.play()
 		
 	def play(self):
 		debug('play')
@@ -193,6 +234,12 @@ class Main(object):
 	def hide_controls(self):
 		self.buttons.hide()
 		
+	def toggle_controls(self):
+		if self.buttons.get_property('visible'):
+			self.buttons.hide()
+		else:
+			self.buttons.show()
+		
 	def fullscreen(self):
 		self.win.fullscreen()
 		self.hide_controls()
@@ -201,11 +248,33 @@ class Main(object):
 		self.win.unfullscreen()
 		self.show_controls()
 		
+	def toggle_fullscreen(self):
+		if self.win.__fullscreen:
+			self.unfullscreen()
+		else:
+			self.fullscreen()
+			
+	def get_volume(self):
+		debug('get volume')
+		return self.player.get_property('volume')
+		
+	def set_volume(self, level):
+		debug('set volume', level)
+		self.player.set_property('volume', level)
+		
 	def get_position(self, percent=False):
-		return self.player.query_position(gst.FORMAT_PERCENT if percent else gst.FORMAT_TIME)[0]
+		try:
+			pos = self.player.query_position(gst.FORMAT_PERCENT if percent else gst.FORMAT_TIME, None)[0]
+			return pos if pos >= 0 else 0
+		except gst.QueryError:
+			return 0
 		
 	def get_duration(self):
-		return self.player.query_duration(gst.FORMAT_TIME)[0]
+		try:
+			dur = self.player.query_duration(gst.FORMAT_TIME, None)[0]
+			return dur if dur >= 0 else 0
+		except gst.QueryError:
+			return 0
 		
 	def previous(self):
 		debug('previous')
@@ -228,11 +297,12 @@ class Main(object):
 			
 	def load(self, uri):
 		debug('load', uri)
-		index = self.lib.index(uri)
-		tags = self.lib[index]._asdict()
+		i = self.lib.index(uri)
+		tags = self.lib[i]._asdict()
 		self.player.set_property('uri', uri)
 		self.player.get_property('video_sink').set_xwindow_id(self.movie_window.window.xid)
 		self.taginject.props.tags = 'replaygain-reference-level=%s,replaygain-track-gain=%s,replaygain-track-peak=%s' % (tags['reference_level'], tags['gain'], tags['peak'])
+		#self.play()
 		
 	def quit(self):
 		self.player.set_state('null')
@@ -240,42 +310,41 @@ class Main(object):
 		
 	def update(self):
 		try:
-			sys.stdout.write('.')
-			sys.stdout.flush()
-			p = self.get_position()
-			self.buttons.set_position(p)
-			d = self.get_duration()
-			self.buttons.set_duration(d)
+			self.buttons.set_position(self.get_position())
+			self.buttons.set_duration(self.get_duration())
 			self.buttons.slider.queue_draw()
 		finally:
 			return True
 		
 	def on_about_to_finish(self, player):
-		try:
-			self.load(self.playlist.next())
-		except StopIteration:
-			pass
-			
+		debug('about to finish')
+		self.load(self.playlist.next())
+		
+	def on_window_state_event(self, window, event):
+		if event.changed_mask & gtk.gdk.WINDOW_STATE_FULLSCREEN:
+			self.win.__fullscreen = bool(event.new_window_state & gtk.gdk.WINDOW_STATE_FULLSCREEN)
+		
 	def on_expose_event(self, window, event, sink):
-		print window.window.xid
 		sink.set_xwindow_id(window.window.xid)
+		
+	def on_state_changed(self, bus, message):
+		old, new, pending = message.parse_state_changed()
+		self.player.__playing = (new == gst.STATE_PLAYING)
+		self.buttons.widgets['play-pause'].set_stock_id(gtk.STOCK_MEDIA_PAUSE if self.player.__playing else gtk.STOCK_MEDIA_PLAY)
 		
 	def on_tag(self, bus, message):
 		for k in message.structure.keys():
 			print k, '=', message.structure[k]
 		
 	def on_eos(self, bus, message):
-		self.stop()
+		debug('eos')
+		print threading.currentThread()
+		self.next()
 		
 	def on_error(self, bus, message):
 		self.stop()
 		err, debug = message.parse_error()
 		print "Error: %s" % err, debug
-		
-	def on_message(self, bus, message):
-		if message.type != gst.MESSAGE_STATE_CHANGED:
-			pass
-			#print message
 		
 	def on_destroy(self, *args):
 		self.quit()

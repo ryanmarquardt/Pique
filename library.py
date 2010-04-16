@@ -44,14 +44,14 @@ class library(object):
 		self.path = path
 
 	def __del__(self):
-		for db in self.db.values()
+		for db in self.db.values():
 			db.commit()
 			db.close()
 			
 	def _get_db(self):
 		t = threading.currentThread()
 		if t not in self.db:
-			self.db[t] = sqlite3.connect(path)
+			self.db[t] = sqlite3.connect(self.path)
 		return self.db[t]
 
 	def init(self):
