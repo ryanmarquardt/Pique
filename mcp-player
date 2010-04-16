@@ -17,6 +17,9 @@ import pygst
 pygst.require('0.10')
 import gst
 
+import library
+import rawtty
+
 Element = gst.element_factory_make
 def Bin(*elements):
 	#elements = [e if not isinstance(e,str) else Element(e) for e in elements]
@@ -40,7 +43,10 @@ class BgThread(threading.Thread):
 		
 class IOThread(BgThread):
 	def main(self):
-		pass
+		with rawtty.rawtty():
+			while True:
+				sys.stdout.write(sys.stdin.read(1))
+				sys.stdout.flush()
 		
 class PlayThread(BgThread):
 	def main(self, gui):
@@ -351,7 +357,6 @@ class Main(object):
 
 if __name__=='__main__':
 	import optparse
-	import library
 	
 	parser = optparse.OptionParser(usage="%prog [songlist ...]", version="%prog 0:01")
 	
