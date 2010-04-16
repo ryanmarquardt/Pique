@@ -4,6 +4,7 @@ import sqlite3
 import re
 import os.path
 import collections
+import threading
 
 VERBOSE = True
 
@@ -38,19 +39,28 @@ from gstreamer import *
 
 class library(object):
 	def __init__(self, path):
-		self.db = sqlite3.connect(path)
+		self.db = {}
+		self.db[threading.currentThread()] = sqlite3.connect(path)
 		self.path = path
 
 	def __del__(self):
-		self.db.commit()
-		self.db.close()
+		for db in self.db.values()
+			db.commit()
+			db.close()
+			
+	def _get_db(self):
+		t = threading.currentThread()
+		if t not in self.db:
+			self.db[t] = sqlite3.connect(path)
+		return self.db[t]
 
 	def init(self):
-		c = self.db.cursor()
+		db = self._get_db()
+		c = db.cursor()
 
 		c.execute('drop table media')
 		c.execute(CREATE_SQL)
-		self.db.commit()
+		db.commit()
 		if VERBOSE: print "Successfully initialized library at %r" % self.path
 
 	def add(self, uri):
@@ -59,9 +69,10 @@ class library(object):
 	@gsub
 	def addmany(self, uris):
 		tagger = tag_reader()
+		db = self._get_db()
 		for uri in uris:
 			uri = unicode(uri)
-			c = self.db.cursor()
+			c = db.cursor()
 			c.execute(SELECT_SQL + SEARCH_SQL % 'uri', (uri,))
 			if c.fetchone():
 				print >> sys.stderr, 'Skipping', uri
@@ -86,31 +97,36 @@ class library(object):
 				)
 				print NewRow
 				c.execute(INSERT_SQL, NewRow)
-				self.db.commit()
+				db.commit()
 
 	def remove(self, id):
-		c = self.db.cursor()
+		db = self._get_db()
+		c = db.cursor()
 		c.execute(DELETE_SQL, (id,))
-		self.db.commit()
+		db.commit()
 
 	def __iter__(self):
-		c = self.db.cursor()
+		db = self._get_db()
+		c = db.cursor()
 		c.execute('select rowid,* from %s' % TABLE_NAME)
 		for row in c:
 			yield row[0], Row._make(row[1:])
 
 	def members(self, column):
-		c = self.db.cursor()
+		db = self._get_db()
+		c = db.cursor()
 		if column in [i[0] for i in COLUMNS]:
 			c.execute('select distinct %s from %s' % (column,TABLE_NAME))
 		for i in c:
 			yield i[0]
 
 	def filter(self, *criteria):
-		c = self.db.cursor()
+		db = self._get_db()
+		c = db.cursor()
 
 	def __getitem__(self, index):
-		c = self.db.cursor()
+		db = self._get_db()
+		c = db.cursor()
 		c.execute('select * from %s where rowid=?' % TABLE_NAME, (index,))
 		r = c.fetchone()
 		if r is None:
@@ -119,7 +135,8 @@ class library(object):
 			return Row._make(r)
 
 	def index(self, uri):
-		c = self.db.cursor()
+		db = self._get_db()
+		c = db.cursor()
 		c.execute('select rowid from %s where uri=?' % TABLE_NAME, (uri,))
 		try:
 			return c.fetchone()[0]
