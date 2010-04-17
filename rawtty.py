@@ -90,7 +90,7 @@ def keypresses(fd=sys.stdin, echo=False, timeout=1, quit='eof'):
 				else:
 					if not any(s.startswith(seq) for s in KNOWN_SEQUENCES):
 						#Escape key, followed by another sequence
-						yield ESCAPE
+						yield 'escape'
 						seq = seq[1:]
 						continue
 					else:
@@ -106,7 +106,7 @@ def keypresses(fd=sys.stdin, echo=False, timeout=1, quit='eof'):
 							raise IOError('Unrecognized Sequence %r' % seq)
 			#print repr(seq), repr(NAMES.get(quit,quit)), seq == NAMES.get(quit,quit)
 			if seq != NAMES.get(quit,quit):
-				yield seq
+				yield NAMES.get(seq,seq)
 			else:
 				return
 			seq = q.get()
@@ -120,7 +120,7 @@ if __name__=='__main__':
 	while True:
 		try:
 			for key in keypresses():
-				print repr(NAMES.get(key,key))
+				print repr(key)
 		except IOError, e:
 			print e
 			break

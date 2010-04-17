@@ -103,6 +103,7 @@ class MediaButtons(gtk.VBox):
 		
 		self.volume = gtk.ToolItem()
 		self.volume.add(gtk.VolumeButton())
+		self.volume.up = False
 		self.volume.get_child().unset_flags(gtk.CAN_FOCUS)
 		self.toolbar.insert(self.volume, -1)
 		
@@ -165,6 +166,8 @@ class Main(object):
 		add_accel('Right', 'right', self.seek, 15*gst.SECOND, False, False)
 		add_accel('Page_Up', 'pgup', self.seek, 60*gst.SECOND, False, False)
 		add_accel('Page_Down', 'pgdn', self.seek, -60*gst.SECOND, False, False)
+		#add_accel('Up', 'up', self.set_volume, .05, False)
+		#add_accel('Down', 'down', self.set_volume, -.05, False)
 		
 		self.console.start()
 		
@@ -189,6 +192,8 @@ class Main(object):
 		
 		self.movie_window = gtk.DrawingArea()
 		self.movie_window.set_flags(gtk.CAN_FOCUS)
+		self.movie_window.add_events(gtk.gdk.BUTTON_PRESS_MASK)
+		self.movie_window.connect('button-press-event', self.on_movie_window_clicked)
 		self.movie_window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color(0,0,0))
 		vbox.pack_start(self.movie_window, True, True)
 		vbox.pack_start(self.buttons, False, False)
@@ -285,9 +290,12 @@ class Main(object):
 		debug('get volume')
 		return self.player.get_property('volume')
 		
-	def set_volume(self, level):
+	def set_volume(self, level, absolute=True):
+		if not absolute:
+			level = max(0, min(1, self.get_volume() + level))
 		debug('set volume', level)
 		self.player.set_property('volume', level)
+		self.buttons.set_volume(level)
 		
 	def get_position(self, percent=False):
 		try:
@@ -340,6 +348,12 @@ class Main(object):
 			self.buttons.slider.queue_draw()
 		finally:
 			return True
+			
+	def on_movie_window_clicked(self, window, event):
+		if event.type == gtk.gdk.BUTTON_PRESS and event.button == 3:
+			self.show_menu()
+		elif event.type == gtk.gdk._2BUTTON_PRESS and event.button == 1:
+			self.toggle_fullscreen()
 		
 	def on_about_to_finish(self, player):
 		debug('about to finish')
