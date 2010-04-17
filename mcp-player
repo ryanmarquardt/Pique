@@ -7,6 +7,7 @@ def debug(*args):
 		print ' '.join(map(str,args))
 
 import os
+import select
 import signal
 import sys
 import threading
@@ -43,10 +44,25 @@ class BgThread(threading.Thread):
 		
 class IOThread(BgThread):
 	def main(self):
-		with rawtty.rawtty():
-			while True:
-				sys.stdout.write(sys.stdin.read(1))
-				sys.stdout.flush()
+		pass
+	
+class ConsoleThread(BgThread):
+	def __init__(self, *args, **kwargs):
+		BgThread.__init__(self, *args, **kwargs)
+		self.keymap = {}
+		
+	def add_accel(self, key, func, *args, **kwargs):
+		self.keymap[key] = func,args,kwargs
+	
+	def main(self):
+		for key in rawtty.keypresses():
+			print key
+			if key in self.keymap:
+				f,args,kwargs = self.keymap[key]
+				f(*args,**kwargs)
+			else:
+				debug('No Key Binding for', key)
+		print 'done'
 		
 class PlayThread(BgThread):
 	def main(self, gui):
@@ -133,6 +149,7 @@ class Main(object):
 			  lambda g,w,k,m:(func(*args),))
 		
 		self.accelgroup = gtk.AccelGroup()
+		self.console = ConsoleThread()
 		add_accel('F11', self.toggle_fullscreen)
 		add_accel('f', self.toggle_fullscreen)
 		add_accel('n', self.next)
@@ -142,6 +159,13 @@ class Main(object):
 		add_accel('c', self.toggle_controls)
 		add_accel('Left', self.seek, -15, False, False)
 		add_accel('Right', self.seek, 15, False, False)
+		
+		self.console.add_accel('f', self.toggle_fullscreen)
+		self.console.add_accel('n', self.next)
+		self.console.add_accel(' ', self.play_pause)
+		self.console.add_accel('q', self.quit)
+		
+		self.console.start()
 		
 		self.win = gtk.Window(gtk.WINDOW_TOPLEVEL)
 		self.win.add_accel_group(self.accelgroup)
@@ -171,8 +195,6 @@ class Main(object):
 		self.win.show_all()
 
 		self.player = gst.element_factory_make('playbin2', 'player')
-		self.player.__playing = False
-		#self.player.connect('about-to-finish', self.on_about_to_finish)
 
 		self.taginject = Element('taginject')
 		audio_bin = Bin(self.taginject, Element('rgvolume'), Element('gconfaudiosink'))
@@ -192,7 +214,6 @@ class Main(object):
 		bus.connect('message::eos', self.on_eos)
 		bus.connect('message::error', self.on_error)
 		bus.connect('message::state-changed', self.on_state_changed)
-		#bus.connect('message::tag', self.on_tag)
 		
 		IOThread().start()
 		PlayThread(self).start()
@@ -201,8 +222,8 @@ class Main(object):
 		self.load(self.playlist.next())
 		self.play()
 		
-		def printcurthread(*args):
-			print threading.currentThread()
+		#def printcurthread(*args):
+			#print threading.currentThread()
 		
 		signal.signal(signal.SIGINT, lambda s,f: self.quit())
 		
@@ -215,8 +236,11 @@ class Main(object):
 			self.player.seek_simple(gst.FORMAT_PERCENT, gst.SEEK_FLAG_FLUSH, 
 			 self.get_position(percent=percent) + new)
 			 
+	def isplaying(self):
+		return self.player.get_state()[1] == gst.STATE_PLAYING
+			 
 	def play_pause(self):
-		if self.player.__playing:
+		if self.isplaying():
 			self.pause()
 		else:
 			self.play()
@@ -284,13 +308,15 @@ class Main(object):
 		
 	def previous(self):
 		debug('previous')
-		self.stop()
 		if self.get_position() < 3 * gst.SECOND:
+			self.stop()
 			try:
 				self.load(self.playlist.previous())
 			except StopIteration:
 				pass
-		self.play()
+			self.play()
+		else:
+			self.seek(0)
 		
 	def next(self):
 		debug('next')
@@ -335,8 +361,8 @@ class Main(object):
 		
 	def on_state_changed(self, bus, message):
 		old, new, pending = message.parse_state_changed()
-		self.player.__playing = (new == gst.STATE_PLAYING)
-		self.buttons.widgets['play-pause'].set_stock_id(gtk.STOCK_MEDIA_PAUSE if self.player.__playing else gtk.STOCK_MEDIA_PLAY)
+		playing = (new == gst.STATE_PLAYING)
+		self.buttons.widgets['play-pause'].set_stock_id(gtk.STOCK_MEDIA_PAUSE if playing else gtk.STOCK_MEDIA_PLAY)
 		
 	def on_tag(self, bus, message):
 		for k in message.structure.keys():
