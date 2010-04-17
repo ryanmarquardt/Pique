@@ -55,7 +55,7 @@ class ConsoleThread(BgThread):
 		self.keymap[key] = func,args,kwargs
 	
 	def main(self):
-		for key in rawtty.keypresses():
+		for key in rawtty.keypresses(timeout=0.3):
 			print key
 			if key in self.keymap:
 				f,args,kwargs = self.keymap[key]
@@ -85,9 +85,9 @@ class MediaButtons(gtk.VBox):
 		
 		self.widgets = {}
 		for name,stock in (
+			 ('previous',gtk.STOCK_MEDIA_PREVIOUS),
 			 ('play-pause',gtk.STOCK_MEDIA_PLAY),
 			 ('stop',gtk.STOCK_MEDIA_STOP),
-			 ('previous',gtk.STOCK_MEDIA_PREVIOUS),
 			 ('next',gtk.STOCK_MEDIA_NEXT),):
 			self.widgets[name] = gtk.ToolButton(stock)
 			self.toolbar.insert(self.widgets[name], -1)
@@ -142,28 +142,29 @@ class Main(object):
 	def __init__(self, files):
 		self.lib = library.library(library.DEFAULT_PATH)
 		
-		def add_accel(accel, func, *args):
-			key, mod = gtk.accelerator_parse(accel)
-			debug(accel, key, mod, func.__name__, args)
-			self.accelgroup.connect_group(key, mod, gtk.ACCEL_VISIBLE,
-			  lambda g,w,k,m:(func(*args),))
+		def add_accel(gtkaccel, consoleaccel, func, *args):
+			if gtkaccel:
+				key, mod = gtk.accelerator_parse(gtkaccel)
+				self.accelgroup.connect_group(key, mod, gtk.ACCEL_VISIBLE,
+				  lambda g,w,k,m:(func(*args),))
+			debug(gtkaccel, consoleaccel, key, mod, func.__name__, args)
+			if consoleaccel:
+				self.console.add_accel(consoleaccel, func, *args)
 		
 		self.accelgroup = gtk.AccelGroup()
 		self.console = ConsoleThread()
-		add_accel('F11', self.toggle_fullscreen)
-		add_accel('f', self.toggle_fullscreen)
-		add_accel('n', self.next)
-		add_accel('space', self.play_pause)
-		add_accel('Escape', self.stop)
-		add_accel('p', self.previous)
-		add_accel('c', self.toggle_controls)
-		add_accel('Left', self.seek, -15, False, False)
-		add_accel('Right', self.seek, 15, False, False)
-		
-		self.console.add_accel('f', self.toggle_fullscreen)
-		self.console.add_accel('n', self.next)
-		self.console.add_accel(' ', self.play_pause)
-		self.console.add_accel('q', self.quit)
+		add_accel('F11', None, self.toggle_fullscreen)
+		add_accel('f', 'f', self.toggle_fullscreen)
+		add_accel('n', 'n', self.next)
+		add_accel('space', ' ', self.play_pause)
+		add_accel('Escape', 'escape', self.stop)
+		add_accel('<Control>W', 'q', self.quit)
+		add_accel('p', 'p', self.previous)
+		add_accel('c', 'c', self.toggle_controls)
+		add_accel('Left', 'left', self.seek, -15*gst.SECOND, False, False)
+		add_accel('Right', 'right', self.seek, 15*gst.SECOND, False, False)
+		add_accel('Page_Up', 'pgup', self.seek, 60*gst.SECOND, False, False)
+		add_accel('Page_Down', 'pgdn', self.seek, -60*gst.SECOND, False, False)
 		
 		self.console.start()
 		
@@ -179,7 +180,6 @@ class Main(object):
 		
 		self.buttons = MediaButtons()
 		self.buttons.connect('play-pause', lambda b:self.play_pause())
-		#self.buttons.connect('pause', lambda b:self.pause())
 		self.buttons.connect('stop', lambda b:self.stop())
 		self.buttons.connect('next', lambda b:self.next())
 		self.buttons.connect('previous', lambda b:self.previous())
@@ -193,8 +193,10 @@ class Main(object):
 		vbox.pack_start(self.movie_window, True, True)
 		vbox.pack_start(self.buttons, False, False)
 		self.win.show_all()
+		
+		self.buttons.widgets['stop'].hide()
 
-		self.player = gst.element_factory_make('playbin2', 'player')
+		self.player = gst.element_factory_make('playbin', 'player')
 
 		self.taginject = Element('taginject')
 		audio_bin = Bin(self.taginject, Element('rgvolume'), Element('gconfaudiosink'))
@@ -222,19 +224,14 @@ class Main(object):
 		self.load(self.playlist.next())
 		self.play()
 		
-		#def printcurthread(*args):
-			#print threading.currentThread()
-		
 		signal.signal(signal.SIGINT, lambda s,f: self.quit())
 		
 	def seek(self, new, absolute=True, percent=False):
-		debug('seek', new, absolute, percent)
-		format = gst.FORMAT_TIME if absolute else gst.FORMAT_PERCENT
-		if absolute:
-			self.player.seek_simple(format, gst.SEEK_FLAG_FLUSH, new)
-		else:
-			self.player.seek_simple(gst.FORMAT_PERCENT, gst.SEEK_FLAG_FLUSH, 
-			 self.get_position(percent=percent) + new)
+		format = gst.FORMAT_PERCENT if percent else gst.FORMAT_TIME
+		if not absolute:
+			new = max(0, new + self.get_position(percent=percent))
+		debug('seek', format, new, absolute, percent)
+		self.player.seek_simple(format, gst.SEEK_FLAG_FLUSH, new)
 			 
 	def isplaying(self):
 		return self.player.get_state()[1] == gst.STATE_PLAYING
@@ -294,29 +291,26 @@ class Main(object):
 		
 	def get_position(self, percent=False):
 		try:
-			pos = self.player.query_position(gst.FORMAT_PERCENT if percent else gst.FORMAT_TIME, None)[0]
-			return pos if pos >= 0 else 0
+			return max(0, self.player.query_position(gst.FORMAT_PERCENT if percent else gst.FORMAT_TIME, None)[0])
 		except gst.QueryError:
 			return 0
 		
 	def get_duration(self):
 		try:
-			dur = self.player.query_duration(gst.FORMAT_TIME, None)[0]
-			return dur if dur >= 0 else 0
+			return max(0, self.player.query_duration(gst.FORMAT_TIME, None)[0])
 		except gst.QueryError:
 			return 0
 		
 	def previous(self):
 		debug('previous')
-		if self.get_position() < 3 * gst.SECOND:
-			self.stop()
+		pos = self.get_position()
+		self.stop()
+		if pos < 3 * gst.SECOND:
 			try:
 				self.load(self.playlist.previous())
 			except StopIteration:
 				pass
-			self.play()
-		else:
-			self.seek(0)
+		self.play()
 		
 	def next(self):
 		debug('next')
@@ -334,7 +328,6 @@ class Main(object):
 		self.player.set_property('uri', uri)
 		self.player.get_property('video_sink').set_xwindow_id(self.movie_window.window.xid)
 		self.taginject.props.tags = 'replaygain-reference-level=%s,replaygain-track-gain=%s,replaygain-track-peak=%s' % (tags['reference_level'], tags['gain'], tags['peak'])
-		#self.play()
 		
 	def quit(self):
 		self.player.set_state('null')
