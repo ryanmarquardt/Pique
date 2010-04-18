@@ -41,17 +41,20 @@ class BgThread(threading.Thread):
 	def __init__(self, *args, **kwargs):
 		threading.Thread.__init__(self, target=self.main, args=args, kwargs=kwargs)
 		self.daemon = True
+		self.init()
+		
+	def init(self):
+		pass
 		
 class IOThread(BgThread):
 	def main(self):
 		pass
 	
 class ConsoleThread(BgThread):
-	def __init__(self, *args, **kwargs):
-		BgThread.__init__(self, *args, **kwargs)
+	def init(self):
 		self.keymap = {}
 		
-	def add_accel(self, key, func, *args, **kwargs):
+	def connect(self, key, func, *args, **kwargs):
 		self.keymap[key] = func,args,kwargs
 	
 	def main(self):
@@ -107,6 +110,9 @@ class MediaButtons(gtk.VBox):
 		self.volume.get_child().unset_flags(gtk.CAN_FOCUS)
 		self.toolbar.insert(self.volume, -1)
 		
+		scale = self.volume.get_child().get_popup().get_child().get_child().get_children()[1]
+		scale.connect('change-value', debug)
+		
 		self.widgets['fullscreen'] = gtk.ToggleToolButton(gtk.STOCK_FULLSCREEN)
 		self.toolbar.insert(self.widgets['fullscreen'], -1)
 		self.widgets['fullscreen'].get_child().unset_flags(gtk.CAN_FOCUS)
@@ -119,7 +125,7 @@ class MediaButtons(gtk.VBox):
 		elif which == 'position':
 			self.slider.get_child().connect('change-value', func, *extra)
 		elif which == 'volume':
-			self.volume.get_child().connect('value-changed', func, *extra)
+			self.volume.get_child().get_popup().get_child().get_child().get_children()[1].connect('change-value', func, *extra)
 		else:
 			gtk.VBox.connect(self, which, func, *extra)
 			
@@ -138,36 +144,51 @@ class MediaButtons(gtk.VBox):
 		
 	def set_volume(self, vol):
 		self.volume.get_child().set_value(vol)
+		
+class KeyMap(object):
+	def __init__(self, console, window):
+		self.keys = {}
+		self.console = console
+		self.window = window
+		self.window.connect('key-press-event', self.on_window_key_press_event)
+		
+	def add(self, key, func, *args, **kwargs):
+		self.console.connect(key, func, *args, **kwargs)
+		self.keys[key] = func,args,kwargs
+		
+	def on_window_key_press_event(self, widget, event):
+		print widget, event
 
 class Main(object):
 	def __init__(self, files):
 		self.lib = library.library(library.DEFAULT_PATH)
 		
-		def add_accel(gtkaccel, consoleaccel, func, *args):
-			if gtkaccel:
-				key, mod = gtk.accelerator_parse(gtkaccel)
-				self.accelgroup.connect_group(key, mod, gtk.ACCEL_VISIBLE,
-				  lambda g,w,k,m:(func(*args),))
-			debug(gtkaccel, consoleaccel, key, mod, func.__name__, args)
-			if consoleaccel:
-				self.console.add_accel(consoleaccel, func, *args)
+		def add_accel(gtkaccel, func, *args):
+			key, mod = gtk.accelerator_parse(gtkaccel)
+			debug(gtkaccel, key, mod, func.__name__, args)
+			self.accelgroup.connect_group(key, mod, gtk.ACCEL_VISIBLE,
+			  lambda g,w,k,m:(func(*args),))
 		
 		self.accelgroup = gtk.AccelGroup()
+		add_accel('F11', self.toggle_fullscreen)
+		add_accel('<Control>W', self.quit)
+		
+		vbox = gtk.VBox()
+		
 		self.console = ConsoleThread()
-		add_accel('F11', None, self.toggle_fullscreen)
-		add_accel('f', 'f', self.toggle_fullscreen)
-		add_accel('n', 'n', self.next)
-		add_accel('space', ' ', self.play_pause)
-		add_accel('Escape', 'escape', self.stop)
-		add_accel('<Control>W', 'q', self.quit)
-		add_accel('p', 'p', self.previous)
-		add_accel('c', 'c', self.toggle_controls)
-		add_accel('Left', 'left', self.seek, -15*gst.SECOND, False, False)
-		add_accel('Right', 'right', self.seek, 15*gst.SECOND, False, False)
-		add_accel('Page_Up', 'pgup', self.seek, 60*gst.SECOND, False, False)
-		add_accel('Page_Down', 'pgdn', self.seek, -60*gst.SECOND, False, False)
-		#add_accel('Up', 'up', self.set_volume, .05, False)
-		#add_accel('Down', 'down', self.set_volume, -.05, False)
+		self.keymap = KeyMap(self.console, vbox)
+		self.keymap.add('f', self.toggle_fullscreen)
+		self.keymap.add('n', self.next)
+		self.keymap.add('space', self.play_pause)
+		self.keymap.add('escape', self.stop)
+		self.keymap.add('p', self.previous)
+		self.keymap.add('c', self.toggle_controls)
+		self.keymap.add('left', self.seek, -15*gst.SECOND, False, False)
+		self.keymap.add('right', self.seek, 15*gst.SECOND, False, False)
+		self.keymap.add('pgup', self.seek, 60*gst.SECOND, False, False)
+		self.keymap.add('pgdn', self.seek, -60*gst.SECOND, False, False)
+		self.keymap.add('up', self.set_volume, .05, False)
+		self.keymap.add('down', self.set_volume, -.05, False)
 		
 		self.console.start()
 		
@@ -178,7 +199,6 @@ class Main(object):
 		self.win.connect('destroy', self.on_destroy)
 		self.win.__fullscreen = False
 		self.win.connect('window-state-event', self.on_window_state_event)
-		vbox = gtk.VBox()
 		self.win.add(vbox)
 		
 		self.buttons = MediaButtons()
@@ -187,13 +207,15 @@ class Main(object):
 		self.buttons.connect('next', lambda b:self.next())
 		self.buttons.connect('previous', lambda b:self.previous())
 		self.buttons.connect('position', lambda a,t,v:self.seek(v, absolute=True, percent=False))
-		self.buttons.connect('volume', lambda b,v:self.set_volume(v))
+		self.buttons.connect('volume', lambda b,s,v:self.set_volume(v))
 		self.buttons.connect('fullscreen', lambda b:self.fullscreen() if b.get_active() else self.unfullscreen())
 		
 		self.movie_window = gtk.DrawingArea()
-		self.movie_window.set_flags(gtk.CAN_FOCUS)
+		#self.movie_window.set_flags(gtk.CAN_FOCUS)
 		self.movie_window.add_events(gtk.gdk.BUTTON_PRESS_MASK)
+		vbox.add_events(gtk.gdk.KEY_PRESS_MASK)
 		self.movie_window.connect('button-press-event', self.on_movie_window_clicked)
+		vbox.connect('key-press-event', debug, 'key-press-event')
 		self.movie_window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color(0,0,0))
 		vbox.pack_start(self.movie_window, True, True)
 		vbox.pack_start(self.buttons, False, False)
@@ -287,15 +309,12 @@ class Main(object):
 			self.fullscreen()
 			
 	def get_volume(self):
-		debug('get volume')
 		return self.player.get_property('volume')
 		
 	def set_volume(self, level, absolute=True):
 		if not absolute:
 			level = max(0, min(1, self.get_volume() + level))
-		debug('set volume', level)
 		self.player.set_property('volume', level)
-		self.buttons.set_volume(level)
 		
 	def get_position(self, percent=False):
 		try:
@@ -346,6 +365,7 @@ class Main(object):
 			self.buttons.set_position(self.get_position())
 			self.buttons.set_duration(self.get_duration())
 			self.buttons.slider.queue_draw()
+			self.buttons.set_volume(self.get_volume())
 		finally:
 			return True
 			

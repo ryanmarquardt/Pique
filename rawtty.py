@@ -37,6 +37,7 @@ NAMES = {
 	'bksp':'\x7f',
 	'tab':'\t',	'shift+tab':'\x1b[Z',
 	'enter':'\n',
+	'space':' ',
 }
 for k,v in NAMES.items():
 	NAMES[v] = k
