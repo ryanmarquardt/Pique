@@ -51,20 +51,12 @@ class IOThread(BgThread):
 		pass
 	
 class ConsoleThread(BgThread):
-	def init(self):
-		self.keymap = {}
-		
 	def connect(self, key, func, *args, **kwargs):
 		self.keymap[key] = func,args,kwargs
 	
 	def main(self):
-		for key in rawtty.keypresses(timeout=0.3):
-			print key
-			if key in self.keymap:
-				f,args,kwargs = self.keymap[key]
-				f(*args,**kwargs)
-			else:
-				debug('No Key Binding for', key)
+		for key in rawtty.keypresses(timeout=0.3, quit='eof'):
+			self.handler(key)
 		print 'done'
 		
 class PlayThread(BgThread):
@@ -145,19 +137,33 @@ class MediaButtons(gtk.VBox):
 	def set_volume(self, vol):
 		self.volume.get_child().set_value(vol)
 		
+class CommandMap(dict):
+	def add(self, command, func, *args, **kwargs):
+		dict.__setitem__(self, command, (func, args, kwargs))
+		
+	def __call__(self, command):
+		func, args, kwargs = dict.__getitem__(self, command)
+		return func(*args, **kwargs)
+		
 class KeyMap(object):
-	def __init__(self, console, window):
+	def __init__(self, commandmap, console, window):
 		self.keys = {}
+		self.commandmap = commandmap
 		self.console = console
+		self.console.handler = self.interpret
 		self.window = window
-		self.window.connect('key-press-event', self.on_window_key_press_event)
+		self.window.add_events(gtk.gdk.KEY_PRESS_MASK)
+		self.window.set_flags(gtk.CAN_FOCUS)
+		self.window.connect('key-press-event', lambda w,e:self.interpret(gtk.accelerator_name(e.keyval, e.state)))
 		
-	def add(self, key, func, *args, **kwargs):
-		self.console.connect(key, func, *args, **kwargs)
-		self.keys[key] = func,args,kwargs
+	def add(self, key, cmd):
+		self.keys[key] = cmd
 		
-	def on_window_key_press_event(self, widget, event):
-		print widget, event
+	def interpret(self, key):
+		try:
+			print self.commandmap(self.keys[key])
+		except KeyError:
+			print 'No key binding for', key
 
 class Main(object):
 	def __init__(self, files):
@@ -173,22 +179,44 @@ class Main(object):
 		add_accel('F11', self.toggle_fullscreen)
 		add_accel('<Control>W', self.quit)
 		
+		self.movie_window = gtk.DrawingArea()
 		vbox = gtk.VBox()
 		
 		self.console = ConsoleThread()
-		self.keymap = KeyMap(self.console, vbox)
-		self.keymap.add('f', self.toggle_fullscreen)
-		self.keymap.add('n', self.next)
-		self.keymap.add('space', self.play_pause)
-		self.keymap.add('escape', self.stop)
-		self.keymap.add('p', self.previous)
-		self.keymap.add('c', self.toggle_controls)
-		self.keymap.add('left', self.seek, -15*gst.SECOND, False, False)
-		self.keymap.add('right', self.seek, 15*gst.SECOND, False, False)
-		self.keymap.add('pgup', self.seek, 60*gst.SECOND, False, False)
-		self.keymap.add('pgdn', self.seek, -60*gst.SECOND, False, False)
-		self.keymap.add('up', self.set_volume, .05, False)
-		self.keymap.add('down', self.set_volume, -.05, False)
+		self.commandmap = CommandMap()
+		self.commandmap.add('fullscreen', self.toggle_fullscreen)
+		self.commandmap.add('next', self.next)
+		self.commandmap.add('play-pause', self.play_pause)
+		self.commandmap.add('stop', self.stop)
+		self.commandmap.add('previous', self.previous)
+		self.commandmap.add('controls', self.toggle_controls)
+		self.commandmap.add('forward-near', self.seek, 15*gst.SECOND, False, False)
+		self.commandmap.add('forward-far', self.seek, 60*gst.SECOND, False, False)
+		self.commandmap.add('back-near', self.seek, -15*gst.SECOND, False, False)
+		self.commandmap.add('back-far', self.seek, -60*gst.SECOND, False, False)
+		self.commandmap.add('volume-up', self.set_volume, .05, False)
+		self.commandmap.add('volume-down', self.set_volume, -.05, False)
+		self.commandmap.add('mute', self.set_volume, 0, True)
+		
+		self.keymap = KeyMap(self.commandmap, self.console, vbox)
+		self.keymap.add('f', 'fullscreen')
+		self.keymap.add('n', 'next')
+		self.keymap.add('space', 'play-pause')
+		self.keymap.add('escape', 'stop')
+		self.keymap.add('p', 'previous')
+		self.keymap.add('c', 'controls')
+		self.keymap.add('left', 'back-near')
+		self.keymap.add('Left', 'back-near')
+		self.keymap.add('right', 'forward-near')
+		self.keymap.add('Right', 'foward-near')
+		self.keymap.add('pgup', 'forward-far')
+		self.keymap.add('Page_Up', 'forward-far')
+		self.keymap.add('pgdn', 'back-far')
+		self.keymap.add('Page_Down', back-far')
+		self.keymap.add('up', 'volume-up')
+		self.keymap.add('Up', 'volume-up')
+		self.keymap.add('down', 'volume-down')
+		self.keymap.add('Down', 'volume-down')
 		
 		self.console.start()
 		
@@ -210,12 +238,10 @@ class Main(object):
 		self.buttons.connect('volume', lambda b,s,v:self.set_volume(v))
 		self.buttons.connect('fullscreen', lambda b:self.fullscreen() if b.get_active() else self.unfullscreen())
 		
-		self.movie_window = gtk.DrawingArea()
 		#self.movie_window.set_flags(gtk.CAN_FOCUS)
 		self.movie_window.add_events(gtk.gdk.BUTTON_PRESS_MASK)
-		vbox.add_events(gtk.gdk.KEY_PRESS_MASK)
 		self.movie_window.connect('button-press-event', self.on_movie_window_clicked)
-		vbox.connect('key-press-event', debug, 'key-press-event')
+		#vbox.connect('key-press-event', debug, 'key-press-event')
 		self.movie_window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color(0,0,0))
 		vbox.pack_start(self.movie_window, True, True)
 		vbox.pack_start(self.buttons, False, False)
