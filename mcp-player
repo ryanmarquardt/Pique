@@ -6,6 +6,7 @@ def debug(*args):
 	if DEBUG:
 		print ' '.join(map(str,args))
 
+import ConfigParser
 import os
 import select
 import signal
@@ -82,7 +83,7 @@ class MediaButtons(gtk.VBox):
 		for name,stock in (
 			 ('previous',gtk.STOCK_MEDIA_PREVIOUS),
 			 ('play-pause',gtk.STOCK_MEDIA_PLAY),
-			 ('stop',gtk.STOCK_MEDIA_STOP),
+			 #('stop',gtk.STOCK_MEDIA_STOP),
 			 ('next',gtk.STOCK_MEDIA_NEXT),):
 			self.widgets[name] = gtk.ToolButton(stock)
 			self.toolbar.insert(self.widgets[name], -1)
@@ -138,16 +139,16 @@ class MediaButtons(gtk.VBox):
 		self.volume.get_child().set_value(vol)
 		
 class CommandMap(dict):
-	def add(self, command, func, *args, **kwargs):
-		dict.__setitem__(self, command, (func, args, kwargs))
+	def add(self, command, func):
+		dict.__setitem__(self, command, func)
 		
-	def __call__(self, command):
-		func, args, kwargs = dict.__getitem__(self, command)
-		return func(*args, **kwargs)
+	def __call__(self, command, *args):
+		func = dict.__getitem__(self, command)
+		return func(*args)
 		
 class KeyMap(object):
-	def __init__(self, commandmap, console, window):
-		self.keys = {}
+	def __init__(self, config, commandmap, console, window):
+		self.keys = dict((str(k).lower(),v) for k,v in config.items('KeyMap'))
 		self.commandmap = commandmap
 		self.console = console
 		self.console.handler = self.interpret
@@ -161,13 +162,15 @@ class KeyMap(object):
 		
 	def interpret(self, key):
 		try:
-			print self.commandmap(self.keys[key])
+			print self.commandmap(self.keys[key.lower()])
 		except KeyError:
 			print 'No key binding for', key
 
 class Main(object):
 	def __init__(self, files):
 		self.lib = library.library(library.DEFAULT_PATH)
+		self.configuration = ConfigParser.SafeConfigParser()
+		self.configuration.read(os.path.join(os.curdir, 'mcp.conf'))
 		
 		def add_accel(gtkaccel, func, *args):
 			key, mod = gtk.accelerator_parse(gtkaccel)
@@ -183,40 +186,24 @@ class Main(object):
 		vbox = gtk.VBox()
 		
 		self.console = ConsoleThread()
-		self.commandmap = CommandMap()
-		self.commandmap.add('fullscreen', self.toggle_fullscreen)
-		self.commandmap.add('next', self.next)
-		self.commandmap.add('play-pause', self.play_pause)
-		self.commandmap.add('stop', self.stop)
-		self.commandmap.add('previous', self.previous)
-		self.commandmap.add('controls', self.toggle_controls)
-		self.commandmap.add('forward-near', self.seek, 15*gst.SECOND, False, False)
-		self.commandmap.add('forward-far', self.seek, 60*gst.SECOND, False, False)
-		self.commandmap.add('back-near', self.seek, -15*gst.SECOND, False, False)
-		self.commandmap.add('back-far', self.seek, -60*gst.SECOND, False, False)
-		self.commandmap.add('volume-up', self.set_volume, .05, False)
-		self.commandmap.add('volume-down', self.set_volume, -.05, False)
-		self.commandmap.add('mute', self.set_volume, 0, True)
-		
-		self.keymap = KeyMap(self.commandmap, self.console, vbox)
-		self.keymap.add('f', 'fullscreen')
-		self.keymap.add('n', 'next')
-		self.keymap.add('space', 'play-pause')
-		self.keymap.add('escape', 'stop')
-		self.keymap.add('p', 'previous')
-		self.keymap.add('c', 'controls')
-		self.keymap.add('left', 'back-near')
-		self.keymap.add('Left', 'back-near')
-		self.keymap.add('right', 'forward-near')
-		self.keymap.add('Right', 'foward-near')
-		self.keymap.add('pgup', 'forward-far')
-		self.keymap.add('Page_Up', 'forward-far')
-		self.keymap.add('pgdn', 'back-far')
-		self.keymap.add('Page_Down', back-far')
-		self.keymap.add('up', 'volume-up')
-		self.keymap.add('Up', 'volume-up')
-		self.keymap.add('down', 'volume-down')
-		self.keymap.add('Down', 'volume-down')
+		self.commandmap = CommandMap({
+			'fullscreen': self.toggle_fullscreen,
+			'next': self.next,
+			'play-pause': self.play_pause,
+			'stop': self.stop,
+			'previous': self.previous,
+			'controls': self.toggle_controls,
+			'forward-near': lambda:self.seek(15*gst.SECOND, False, False),
+			'forward-far': lambda:self.seek(60*gst.SECOND, False, False),
+			'beginning': lambda:self.seek(0, True, True),
+			'end': lambda:self.seek(self.get_duration(), True, False),
+			'back-near': lambda:self.seek(-15*gst.SECOND, False, False),
+			'back-far': lambda:self.seek(-60*gst.SECOND, False, False),
+			'volume-up': lambda:self.set_volume(.05, False),
+			'volume-down': lambda:self.set_volume(-.05, False),
+			'mute': lambda:self.set_volume(0, True),
+		})
+		self.keymap = KeyMap(self.configuration, self.commandmap, self.console, vbox)
 		
 		self.console.start()
 		
@@ -231,31 +218,30 @@ class Main(object):
 		
 		self.buttons = MediaButtons()
 		self.buttons.connect('play-pause', lambda b:self.play_pause())
-		self.buttons.connect('stop', lambda b:self.stop())
+		#self.buttons.connect('stop', lambda b:self.stop())
 		self.buttons.connect('next', lambda b:self.next())
 		self.buttons.connect('previous', lambda b:self.previous())
 		self.buttons.connect('position', lambda a,t,v:self.seek(v, absolute=True, percent=False))
 		self.buttons.connect('volume', lambda b,s,v:self.set_volume(v))
 		self.buttons.connect('fullscreen', lambda b:self.fullscreen() if b.get_active() else self.unfullscreen())
 		
-		#self.movie_window.set_flags(gtk.CAN_FOCUS)
 		self.movie_window.add_events(gtk.gdk.BUTTON_PRESS_MASK)
 		self.movie_window.connect('button-press-event', self.on_movie_window_clicked)
-		#vbox.connect('key-press-event', debug, 'key-press-event')
 		self.movie_window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color(0,0,0))
 		vbox.pack_start(self.movie_window, True, True)
 		vbox.pack_start(self.buttons, False, False)
 		self.win.show_all()
 		
-		self.buttons.widgets['stop'].hide()
+		#self.buttons.widgets['stop'].hide()
 
 		self.player = gst.element_factory_make('playbin', 'player')
 
 		self.taginject = Element('taginject')
-		audio_bin = Bin(self.taginject, Element('rgvolume'), Element('gconfaudiosink'))
+		audio_sink = Element(self.configuration.get('Gstreamer', 'audio-plugin'))
+		audio_bin = Bin(self.taginject, Element('rgvolume'), audio_sink)
 		self.player.set_property('audio-sink', audio_bin)
 		
-		video_sink = Element('xvimagesink')
+		video_sink = Element(self.configuration.get('Gstreamer', 'video-plugin'))
 		self.movie_window.connect('expose-event', self.on_expose_event, video_sink)
 		video_sink.set_property('force-aspect-ratio', True)
 		self.player.set_property('video-sink', video_sink)
@@ -274,8 +260,7 @@ class Main(object):
 		PlayThread(self).start()
 		
 		self.buttons.set_volume(0.8)
-		self.load(self.playlist.next())
-		self.play()
+		self.next()
 		
 		signal.signal(signal.SIGINT, lambda s,f: self.quit())
 		
@@ -298,6 +283,7 @@ class Main(object):
 	def play(self):
 		debug('play')
 		self.player.set_state('playing')
+		self.player.get_property('video_sink').set_xwindow_id(self.movie_window.window.xid)
 		
 	def pause(self):
 		debug('pause')
@@ -362,7 +348,7 @@ class Main(object):
 			try:
 				self.load(self.playlist.previous())
 			except StopIteration:
-				pass
+				return
 		self.play()
 		
 	def next(self):
@@ -371,7 +357,7 @@ class Main(object):
 		try:
 			self.load(self.playlist.next())
 		except StopIteration:
-			pass
+			return
 		self.play()
 			
 	def load(self, uri):
@@ -379,7 +365,6 @@ class Main(object):
 		i = self.lib.index(uri)
 		tags = self.lib[i]._asdict()
 		self.player.set_property('uri', uri)
-		self.player.get_property('video_sink').set_xwindow_id(self.movie_window.window.xid)
 		self.taginject.props.tags = 'replaygain-reference-level=%s,replaygain-track-gain=%s,replaygain-track-peak=%s' % (tags['reference_level'], tags['gain'], tags['peak'])
 		
 	def quit(self):
