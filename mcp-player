@@ -38,6 +38,11 @@ def Bin(*elements):
 					j+=1
 	return bin
 	
+def time_from_ns(ns):
+	m,s = divmod(ns/gst.SECOND, 60)
+	h,m = divmod(m,60)
+	return '%d:%02d:%02d' % (h,m,s) if h else '%d:%02d' % (m,s)
+		
 class BgThread(threading.Thread):
 	def __init__(self, *args, **kwargs):
 		threading.Thread.__init__(self, target=self.main, args=args, kwargs=kwargs)
@@ -66,11 +71,6 @@ class PlayThread(BgThread):
 			gui.update()
 			time.sleep(0.1)
 			
-def time_from_ns(ns):
-	m,s = divmod(ns/gst.SECOND, 60)
-	h,m = divmod(m,60)
-	return '%d:%02d:%02d' % (h,m,s) if h else '%d:%02d' % (m,s)
-	
 class MediaButtons(gtk.VBox):
 	def __init__(self):
 		gtk.VBox.__init__(self)
@@ -365,7 +365,8 @@ class Main(object):
 		i = self.lib.index(uri)
 		tags = self.lib[i]._asdict()
 		self.player.set_property('uri', uri)
-		self.taginject.props.tags = 'replaygain-reference-level=%s,replaygain-track-gain=%s,replaygain-track-peak=%s' % (tags['reference_level'], tags['gain'], tags['peak'])
+		rgtags = 'replaygain-reference-level','replaygain-track-gain','replaygain-track-peak'
+		self.taginject.props.tags = ','.join(['%s=%s' % (k,tags[k]) for k in rgtags])
 		
 	def quit(self):
 		self.player.set_state('null')
