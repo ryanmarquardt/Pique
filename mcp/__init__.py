@@ -1,17 +1,8 @@
-DEBUG = True
-TIME_FORMAT = 'hms'
-def debug(*args):
-	if DEBUG:
-		print ' '.join(map(str,args))
-
-#import collections
 import ConfigParser
 import os
-#import select
 import signal
-#import socket
 import sys
-#import threading
+import threading
 import time
 import traceback
 
@@ -21,7 +12,12 @@ pygst.require('0.10')
 import gst
 
 import library
-#import rawtty
+
+DEBUG = True
+TIME_FORMAT = 'hms'
+def debug(*args):
+	if DEBUG:
+		print threading.currentThread(), ' '.join(map(str,args))
 
 Element = gst.element_factory_make
 def Bin(*elements):
@@ -38,10 +34,28 @@ def Bin(*elements):
 					j+=1
 	return bin
 	
-def time_from_ns(ns):
-	m,s = divmod(ns/gst.SECOND, 60)
-	h,m = divmod(m,60)
-	return '%d:%02d:%02d' % (h,m,s) if h else '%d:%02d' % (m,s)
+class Time(long):
+	@classmethod
+	def from_ns(cls, ns):
+		return Time(ns)
+		
+	@classmethod
+	def from_s(cls, s):
+		return Time(s*gst.SECOND)
+		
+	def __repr__(self):
+		return self.format('s.')
+		
+	def __str__(self):
+		return self.format('hms')
+		
+	def format(self, f):
+		if f == 'hms':
+			m,s = divmod(self/gst.SECOND, 60)
+			h,m = divmod(m,60)
+			return '%d:%02d:%02d' % (h,m,s) if h else '%d:%02d' % (m,s)
+		elif f == 's.':
+			return '%f' % (self / float(gst.SECOND))
 
 from thread import BgThread
 from network import NetThread
@@ -109,7 +123,7 @@ class MediaButtons(gtk.VBox):
 		if TIME_FORMAT == 'percent':
 			return "%2d%%" % (100 * pos / dur)
 		elif TIME_FORMAT == 'hms':
-			return ' / '.join([time_from_ns(x) for x in (pos,dur)])
+			return '%s / %s' % (Time(pos),Time(dur))
 		
 	def set_duration(self, dur):
 		self.position.set_upper(float(dur))
@@ -120,30 +134,28 @@ class MediaButtons(gtk.VBox):
 	def set_volume(self, vol):
 		self.volume.get_child().set_value(vol)
 		
-class CommandMap(dict):
-	def __call__(self, command, *args):
-		func = dict.__getitem__(self, command)
-		return func(*args)
-		
 class KeyMap(object):
-	def __init__(self, config, commandmap, console, window):
+	def __init__(self, config, commandmap):
 		self.keys = dict((str(k).lower(),v) for k,v in config.items('KeyMap'))
 		self.commandmap = commandmap
-		self.console = console
-		self.console.handler = self.interpret
-		self.window = window
-		self.window.add_events(gtk.gdk.KEY_PRESS_MASK)
-		self.window.set_flags(gtk.CAN_FOCUS)
-		self.window.connect('key-press-event', lambda w,e:self.interpret(gtk.accelerator_name(e.keyval, e.state)))
+		
+	def setup_console(self, console):
+		console.handler = self.interpret
+		
+	def setup_gtk_window(self, window):
+		window.add_events(gtk.gdk.KEY_PRESS_MASK)
+		window.set_flags(gtk.CAN_FOCUS)
+		window.connect('key-press-event', lambda w,e:self.interpret(gtk.accelerator_name(e.keyval, e.state)))
 		
 	def add(self, key, cmd):
 		self.keys[key] = cmd
 		
 	def interpret(self, key):
 		try:
-			return self.commandmap(self.keys[key.lower()])
+			func = self.commandmap[self.keys[key.lower()]]
+			return func()
 		except KeyError:
-			print 'No key binding for', key
+			debug('No key binding for', key)
 			
 class Sidebar(gtk.HPaned):
 	def __init__(self, moviewindow):
@@ -184,7 +196,7 @@ class Main(object):
 		vbox = gtk.VBox()
 		
 		self.console = ConsoleThread()
-		self.commandmap = CommandMap({
+		self.commandmap = {
 			'fullscreen': self.toggle_fullscreen,
 			'next': self.next,
 			'play-pause': self.play_pause,
@@ -205,8 +217,10 @@ class Main(object):
 			'menu': self.toggle_menu,
 			'show-menu': self.show_menu,
 			'hide-menu': self.hide_menu,
-		})
-		self.keymap = KeyMap(self.configuration, self.commandmap, self.console, vbox)
+		}
+		self.keymap = KeyMap(self.configuration, self.commandmap)
+		self.keymap.setup_console(self.console)
+		self.keymap.setup_gtk_window(vbox)
 		
 		self.console.start()
 		
@@ -427,7 +441,6 @@ class Main(object):
 		
 	def on_eos(self, bus, message):
 		debug('eos')
-		print threading.currentThread()
 		self.next()
 		
 	def on_error(self, bus, message):
