@@ -4,13 +4,14 @@ def debug(*args):
 	if DEBUG:
 		print ' '.join(map(str,args))
 
+#import collections
 import ConfigParser
 import os
-import select
+#import select
 import signal
-import socket
+#import socket
 import sys
-import threading
+#import threading
 import time
 import traceback
 
@@ -20,7 +21,7 @@ pygst.require('0.10')
 import gst
 
 import library
-import rawtty
+#import rawtty
 
 Element = gst.element_factory_make
 def Bin(*elements):
@@ -41,52 +42,11 @@ def time_from_ns(ns):
 	m,s = divmod(ns/gst.SECOND, 60)
 	h,m = divmod(m,60)
 	return '%d:%02d:%02d' % (h,m,s) if h else '%d:%02d' % (m,s)
-		
-class BgThread(threading.Thread):
-	def __init__(self, *args, **kwargs):
-		threading.Thread.__init__(self, target=self.main, args=args, kwargs=kwargs)
-		self.daemon = True
-		self.init()
-		
-	def init(self):
-		pass
-		
-class ConnectionThread(BgThread):
-	def main(self, commandmap, sock, address):
-		s = sock.makefile()
-		debug('connected to:', address)
-		for line in s:
-			try:
-				commandmap(line.strip())
-			except:
-				s.write(traceback.format_exc())
-				break
-			else:
-				s.write('OK\n')
-		s.close()
-		sock.close()
-		debug('connection closed:', address)
-		
-class NetThread(BgThread):
-	def main(self, config, commandmap):
-		host = config.get('Network', 'listen-host')
-		port = config.getint('Network', 'listen-port')
-		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.bind((host, port))
-		sock.listen(5)
-		while True:
-			conn, addr = sock.accept()
-			ConnectionThread(commandmap, conn, addr).start()
-	
-class ConsoleThread(BgThread):
-	def connect(self, key, func, *args, **kwargs):
-		self.keymap[key] = func,args,kwargs
-	
-	def main(self):
-		for key in rawtty.keypresses(timeout=0.3, quit='eof'):
-			self.handler(key)
-		print 'done'
-		
+
+from thread import BgThread
+from network import NetThread
+from console import ConsoleThread
+
 class PlayThread(BgThread):
 	def main(self, gui):
 		while True:
@@ -181,7 +141,7 @@ class KeyMap(object):
 		
 	def interpret(self, key):
 		try:
-			print self.commandmap(self.keys[key.lower()])
+			return self.commandmap(self.keys[key.lower()])
 		except KeyError:
 			print 'No key binding for', key
 			
@@ -199,12 +159,10 @@ class Sidebar(gtk.HPaned):
 		self.tracklist.append_column(gtk.TreeViewColumn('Title', gtk.CellRendererText(), text=0))
 		self.menu.pack_end(self.tracklist)
 		
-class Playlist(object):
-	def __init__(self):
-		pass
+from playlist import Playlist
 
 class Main(object):
-	def __init__(self, files):
+	def __init__(self):
 		self.lib = library.library(library.DEFAULT_PATH)
 		self.configuration = ConfigParser.SafeConfigParser()
 		self.configuration.read((
@@ -290,9 +248,9 @@ class Main(object):
 		self.movie_window.connect('expose-event', self.on_expose_event, video_sink)
 		video_sink.set_property('force-aspect-ratio', True)
 		self.player.set_property('video-sink', video_sink)
-		self.player.set_property('vis-plugin', Element('goom2k1'))
+		self.player.set_property('vis-plugin', Element(self.configuration.get('Gstreamer','vis-plugin')))
 		
-		self.playlist = iter(files)
+		self.playlist = Playlist()
 
 		bus = self.player.get_bus()
 		bus.add_signal_watch()
@@ -301,6 +259,9 @@ class Main(object):
 		bus.connect('message::error', self.on_error)
 		bus.connect('message::state-changed', self.on_state_changed)
 		
+	def start(self):
+		gtk.gdk.threads_init()
+		
 		NetThread(self.configuration, self.commandmap).start()
 		PlayThread(self).start()
 		
@@ -308,6 +269,7 @@ class Main(object):
 		self.next()
 		
 		signal.signal(signal.SIGINT, lambda s,f: self.quit())
+		gtk.main()
 		
 	def seek(self, new, absolute=True, percent=False):
 		format = gst.FORMAT_PERCENT if percent else gst.FORMAT_TIME

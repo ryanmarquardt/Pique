@@ -208,6 +208,12 @@ class library(collections.MutableMapping):
 		c.execute('select * from %s where ' + ','.join(['%s=?' for k in kwargs.keys()]), kwargs.values())
 		for i in c:
 			yield Row._make(i)
+			
+	def select_uris(self, **kwargs):
+		c = self.db.cursor()
+		c.execute('select uri from %s where' % TABLE_NAME + ','.join(['%s=?' for k in kwargs.keys()]), kwargs.values())
+		for i in c:
+			yield i[0]
 
 def uri(path):
 	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://%s' % os.path.abspath(path)

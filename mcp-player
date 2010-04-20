@@ -3,38 +3,26 @@
 from mcp import *
 import optparse
 
-
-parser = optparse.OptionParser(usage="%prog [songlist ...]", version="%prog 0:01")
-
-l = library.library(library.DEFAULT_PATH)
-p = []
-
-def my_callback(option, opt_str, value, parser):
-	c = l.db.cursor()
-	c.execute('select uri from media where %s=? order by artist,album,track_number' % opt_str[2:], (value,))
-	for u in c:
-		print u[0]
-		p.append(u[0])
-
-parser.add_option('--album',
-callback=my_callback, action="callback", type="string",
-help="Include all songs in ALBUM in the playlist")
-parser.add_option('--artist',
-callback=my_callback, action="callback", type="string",
-help="Include all songs by ARTIST in the playlist")
-parser.add_option('--genre',
-callback=my_callback, action="callback", type="string",
-help="Include all songs in GENRE in the playlist")
-
 sys.argv = ['mcp-library'] + \
 ['file:///home/ryan/Videos/Family Guy/%s' % f for f in os.listdir('/home/ryan/Videos/Family Guy')]
 
+parser = optparse.OptionParser(usage="%prog [songlist ...]", version="%prog 0:01")
+
+m = Main()
+
+def my_callback(option, opt_str, value, parser):
+	kwargs = {opt_str[2:]: value}
+	for uri in m.lib.select_uris(**kwargs):
+		print uri
+		m.playlist.append(uri)
+
+parser.add_option('--album', callback=my_callback, action="callback", type="string", help="Include all songs in ALBUM in the playlist")
+parser.add_option('--artist', callback=my_callback, action="callback", type="string", help="Include all songs by ARTIST in the playlist")
+parser.add_option('--genre', callback=my_callback, action="callback", type="string", help="Include all songs in GENRE in the playlist")
 options, args = parser.parse_args()
 
 for a in args:
-	p.append(library.uri(a))
+	m.playlist.append(library.uri(a))
 
-Main(p)
-gtk.gdk.threads_init()
-gtk.main()
+m.start()
 print
