@@ -38,11 +38,8 @@ SEARCH_SQL = u'where %s=? '
 SELECT_SQL = u'select * from %s ' % TABLE_NAME
 DELETE_SQL = u'delete from %s where uri=?' % TABLE_NAME
 
-DEBUG = True
-def debug(*args):
-	if DEBUG:
-		print ' '.join(map(str,args))
-	
+from common import *
+
 Element = gst.element_factory_make
 def Bin(*elements):
 	#elements = [e if not isinstance(e,str) else Element(e) for e in elements]

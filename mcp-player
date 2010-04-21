@@ -22,7 +22,7 @@ parser.add_option('--genre', callback=my_callback, action="callback", type="stri
 options, args = parser.parse_args()
 
 for a in args:
-	m.playlist.append(library.uri(a))
+	m.player.playlist.append(library.uri(a))
 
 m.start()
 print

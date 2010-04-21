@@ -13,11 +13,8 @@ import gst
 
 import library
 
-DEBUG = True
+from common import *
 TIME_FORMAT = 'hms'
-def debug(*args):
-	if DEBUG:
-		print threading.currentThread(), ' '.join(map(str,args))
 
 Element = gst.element_factory_make
 def Bin(*elements):
@@ -56,15 +53,27 @@ class Time(long):
 			return '%d:%02d:%02d' % (h,m,s) if h else '%d:%02d' % (m,s)
 		elif f == 's.':
 			return '%f' % (self / float(gst.SECOND))
-
+			
+class Toggle(object):
+	def __init__(self, get, set, unset):
+		self.__nonzero__ = get
+		self.set = set
+		self.unset = unset
+	
+	def switch(self):
+		if self:
+			self.unset()
+		else:
+			self.set()
+		
 from thread import BgThread
 from network import NetThread
 from console import ConsoleThread
 
 class PlayThread(BgThread):
-	def main(self, gui):
+	def main(self, update):
 		while True:
-			gui.update()
+			update()
 			time.sleep(0.1)
 			
 class MediaButtons(gtk.VBox):
@@ -173,125 +182,190 @@ class Sidebar(gtk.HPaned):
 		
 from playlist import Playlist
 
-class Main(object):
+class VideoBox(gtk.VBox):
 	def __init__(self):
-		self.lib = library.library(library.DEFAULT_PATH)
-		self.configuration = ConfigParser.SafeConfigParser()
-		self.configuration.read((
-			os.path.join(os.curdir, 'mcp.conf'),
-			'/home/ryan/Projects/mcp/mcp.conf',
-		))
-		
-		def add_accel(gtkaccel, func, *args):
-			key, mod = gtk.accelerator_parse(gtkaccel)
-			debug(gtkaccel, key, mod, func.__name__, args)
-			self.accelgroup.connect_group(key, mod, gtk.ACCEL_VISIBLE,
-			  lambda g,w,k,m:(func(*args),))
-		
-		self.accelgroup = gtk.AccelGroup()
-		add_accel('F11', self.toggle_fullscreen)
-		add_accel('<Control>W', self.quit)
-		
+		gtk.VBox.__init__(self)
 		self.movie_window = gtk.DrawingArea()
-		vbox = gtk.VBox()
-		
-		self.console = ConsoleThread()
-		self.commandmap = {
-			'fullscreen': self.toggle_fullscreen,
-			'next': self.next,
-			'play-pause': self.play_pause,
-			'play': self.play,
-			'pause': self.pause,
-			'stop': self.stop,
-			'previous': self.previous,
-			'controls': self.toggle_controls,
-			'forward-near': lambda:self.seek(15*gst.SECOND, False, False),
-			'forward-far': lambda:self.seek(60*gst.SECOND, False, False),
-			'beginning': lambda:self.seek(0, True, True),
-			'end': lambda:self.seek(self.get_duration(), True, False),
-			'back-near': lambda:self.seek(-15*gst.SECOND, False, False),
-			'back-far': lambda:self.seek(-60*gst.SECOND, False, False),
-			'volume-up': lambda:self.set_volume(.05, False),
-			'volume-down': lambda:self.set_volume(-.05, False),
-			'mute': lambda:self.set_volume(0, True),
-			'menu': self.toggle_menu,
-			'show-menu': self.show_menu,
-			'hide-menu': self.hide_menu,
-		}
-		self.keymap = KeyMap(self.configuration, self.commandmap)
-		self.keymap.setup_console(self.console)
-		self.keymap.setup_gtk_window(vbox)
-		
-		self.console.start()
-		
-		self.win = gtk.Window(gtk.WINDOW_TOPLEVEL)
-		self.win.add_accel_group(self.accelgroup)
-		self.win.set_title('Video-Player')
-		self.win.set_default_size(500, 400)
-		self.win.connect('destroy', self.on_destroy)
-		self.win.__fullscreen = False
-		self.win.connect('window-state-event', self.on_window_state_event)
-		self.win.add(vbox)
 		
 		self.buttons = MediaButtons()
-		self.buttons.connect('play-pause', lambda b:self.play_pause())
-		self.buttons.connect('next', lambda b:self.next())
-		self.buttons.connect('previous', lambda b:self.previous())
-		self.buttons.connect('position', lambda a,t,v:self.seek(v, absolute=True, percent=False))
-		self.buttons.connect('volume', lambda b,s,v:self.set_volume(v))
-		#self.buttons.connect('fullscreen', lambda b:self.fullscreen() if b.get_active() else self.unfullscreen())
 		
 		self.movie_window.add_events(gtk.gdk.BUTTON_PRESS_MASK)
-		self.movie_window.connect('button-press-event', self.on_movie_window_clicked)
 		self.movie_window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color(0,0,0))
 		
 		self.sidebar = Sidebar(self.movie_window)
 		
-		vbox.pack_start(self.sidebar, True, True)
-		vbox.pack_start(self.buttons, False, False)
-		self.win.show_all()
+		gtk.VBox.pack_start(self, self.sidebar, True, True)
+		gtk.VBox.pack_start(self, self.buttons, False, False)
 		
-		self.player = gst.element_factory_make('playbin', 'player')
+		self.controls_visible = Toggle(
+			lambda:self.buttons.get_property('visible'),
+			self.buttons.show,
+			self.buttons.hide
+		)
+		self.menu_visible = Toggle(
+			lambda:self.sidebar.menu.get_property('visible'),
+			self.sidebar.menu.show,
+			self.sidebar.menu.hide
+		)
+		
+		
+	def connect(self, which, *args):
+		if which in ('play-pause','next','previous', 'position', 'volume'):
+			self.buttons.connect(which, *args)
+		elif which == 'xid-request':
+			self.movie_window.connect('expose-event', *args)
+		elif which == 'clicked':
+			self.movie_window.connect('button-press-event', *args)
+		
+	def update(self, bus, message):
+		debug('update', message.structure.to_string())
+		struct = message.structure
+		try:
+			self.buttons.set_position(struct['position'])
+			self.buttons.set_duration(struct['duration'])
+			self.buttons.slider.queue_draw()
+		except:
+			traceback.print_exc()
+		finally:
+			return True
+			
+class GUI(gtk.Window):
+	def __init__(self):
+		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)
+		
+		self.accelgroup = gtk.AccelGroup()
+		self.add_accel('F11', self.toggle_fullscreen)
+		self.add_accel('<Control>W', self.destroy)
+		gtk.Window.add_accel_group(self, self.accelgroup)
+		
+		gtk.Window.set_title(self, 'Video-Player')
+		gtk.Window.set_default_size(self, 500, 400)
+		self.__fullscreen = False
+		gtk.Window.connect(self, 'window-state-event', self.on_window_state_event)
+		
+		self.videobox = VideoBox()
+		gtk.Window.add(self, self.videobox)
+		gtk.Window.show_all(self)
+		
+	def connect(self, which, *args):
+		if which in ('clicked', 'play-pause', 'next', 'previous', 'position', 'volume', 'xid-request'):
+			self.videobox.connect(which, *args)
+		else:
+			gtk.Window.connect(self, which, *args)
+		
+	def add_accel(self, gtkaccel, func):
+		key, mod = gtk.accelerator_parse(gtkaccel)
+		debug(gtkaccel, key, mod, func.__name__)
+		self.accelgroup.connect_group(key, mod, gtk.ACCEL_VISIBLE,
+		  lambda g,w,k,m:(func(),))
+	
+	def on_window_state_event(self, window, event):
+		if event.changed_mask & gtk.gdk.WINDOW_STATE_FULLSCREEN:
+			self.__fullscreen = bool(event.new_window_state & gtk.gdk.WINDOW_STATE_FULLSCREEN)
+		
+	def on_state_changed(self, bus, message):
+		old, new, pending = message.parse_state_changed()
+		playing = (new == gst.STATE_PLAYING)
+		self.videobox.buttons.widgets['play-pause'].set_stock_id(gtk.STOCK_MEDIA_PAUSE if playing else gtk.STOCK_MEDIA_PLAY)
+		
+	def fullscreen(self):
+		gtk.Window.fullscreen(self)
+		self.hide_controls()
+		
+	def unfullscreen(self):
+		gtk.Window.unfullscreen(self)
+		self.show_controls()
+		
+	def toggle_fullscreen(self):
+		if self.__fullscreen:
+			self.unfullscreen()
+		else:
+			self.fullscreen()
+		
+	def show_controls(self):
+		self.videobox.controls_visible.set()
+		
+	def hide_controls(self):
+		self.videobox.controls_visible.unset()
+		
+	def toggle_controls(self):
+		self.videobox.controls_visible.switch()
+		
+	def show_menu(self):
+		self.videobox.menu_visible.set()
+		
+	def hide_menu(self):
+		self.videobox.menu_visible.unset()
+		
+	def toggle_menu(self):
+		self.videobox.menu_visible.switch()
+		
+class Player(object):
+	def __init__(self, config, lib):
+		self.lib = lib
 		
 		self.taginject = Element('taginject')
-		audio_sink = Element(self.configuration.get('Gstreamer', 'audio-plugin'))
-		audio_bin = Bin(self.taginject, Element('rgvolume'), audio_sink)
-		self.player.set_property('audio-sink', audio_bin)
+		audio_sink = Element(config.get('Gstreamer', 'audio-plugin'))
+		self.audio_bin = Bin(self.taginject, Element('rgvolume'), audio_sink)
 		
-		video_sink = Element(self.configuration.get('Gstreamer', 'video-plugin'))
-		self.movie_window.connect('expose-event', self.on_expose_event, video_sink)
-		video_sink.set_property('force-aspect-ratio', True)
-		self.player.set_property('video-sink', video_sink)
-		self.player.set_property('vis-plugin', Element(self.configuration.get('Gstreamer','vis-plugin')))
+		self.video_sink = Element(config.get('Gstreamer', 'video-plugin'))
+		self.video_sink.set_property('force-aspect-ratio', True)
+		
+		self.player = Element('playbin')
+		self.player.set_property('audio-sink', self.audio_bin)
+		self.player.set_property('video-sink', self.video_sink)
+		self.player.set_property('vis-plugin', Element(config.get('Gstreamer','vis-plugin')))
 		
 		self.playlist = Playlist()
-
-		bus = self.player.get_bus()
-		bus.add_signal_watch()
-		bus.enable_sync_message_emission()
-		bus.connect('message::eos', self.on_eos)
-		bus.connect('message::error', self.on_error)
-		bus.connect('message::state-changed', self.on_state_changed)
 		
-	def start(self):
-		gtk.gdk.threads_init()
+		self._window = None
+		self.bus.add_signal_watch()
+		self.bus.enable_sync_message_emission()
 		
-		NetThread(self.configuration, self.commandmap).start()
-		PlayThread(self).start()
+		self.last_update = ()
+		self.updatethread = PlayThread(self.emit_update)
+		self.updatethread.start()
 		
-		self.buttons.set_volume(0.8)
-		self.next()
+	def emit_update(self):
+		try:
+			pos, dur = self.get_position(), self.get_duration()
+			if (pos,dur) != self.last_update:
+				self.last_update = pos,dur
+				debug(pos, dur)
+				struct = gst.structure_from_string('update,position=%d,duration=%d' % (pos,dur))
+				m = gst.message_new_custom(gst.MESSAGE_APPLICATION, self.player, struct)
+				self.bus.post(m)
+		except:
+			traceback.print_exc()
 		
-		signal.signal(signal.SIGINT, lambda s,f: self.quit())
-		gtk.main()
+	@property
+	def bus(self):
+		return self.player.get_bus()
 		
+	@property
+	def window(self):
+		return self._window
+	@window.setter
+	def window(self, w):
+		if self._window is not None:
+			self._window.disconnect(self._window_handler)
+		self._window = w
+		self._window_handler = self._window.connect('expose-event', self.refresh_xid)
+		
+	def refresh_xid(self, widget=None, event=None):
+		self.video_sink.set_xwindow_id(self._window.window.xid)
+		
+	def connect(self, which, *args):
+		debug('player.connect', which, args)
+		self.bus.connect('message::%s' % which, *args)
+	
 	def seek(self, new, absolute=True, percent=False):
 		format = gst.FORMAT_PERCENT if percent else gst.FORMAT_TIME
 		if not absolute:
 			new = max(0, new + self.get_position(percent=percent))
 		debug('seek', format, new, absolute, percent)
 		self.player.seek_simple(format, gst.SEEK_FLAG_FLUSH, new)
-			 
+	
 	def isplaying(self):
 		return self.player.get_state()[1] == gst.STATE_PLAYING
 			 
@@ -304,7 +378,7 @@ class Main(object):
 	def play(self):
 		debug('play')
 		self.player.set_state('playing')
-		self.player.get_property('video_sink').set_xwindow_id(self.movie_window.window.xid)
+		self.refresh_xid()
 		
 	def pause(self):
 		debug('pause')
@@ -314,45 +388,6 @@ class Main(object):
 		debug('stop')
 		self.player.set_state('null')
 		
-	def show_controls(self):
-		debug('show controls')
-		self.buttons.show()
-		
-	def hide_controls(self):
-		self.buttons.hide()
-		
-	def toggle_controls(self):
-		if self.buttons.get_property('visible'):
-			self.buttons.hide()
-		else:
-			self.buttons.show()
-		
-	def fullscreen(self):
-		self.win.fullscreen()
-		self.hide_controls()
-		
-	def unfullscreen(self):
-		self.win.unfullscreen()
-		self.show_controls()
-		
-	def toggle_fullscreen(self):
-		if self.win.__fullscreen:
-			self.unfullscreen()
-		else:
-			self.fullscreen()
-			
-	def show_menu(self):
-		self.sidebar.menu.show()
-		
-	def hide_menu(self):
-		self.sidebar.menu.hide()
-		
-	def toggle_menu(self):
-		if self.sidebar.menu.get_property('visible'):
-			self.hide_menu()
-		else:
-			self.show_menu()
-			
 	def get_volume(self):
 		return self.player.get_property('volume')
 		
@@ -400,44 +435,83 @@ class Main(object):
 		rgtags = 'replaygain-reference-level','replaygain-track-gain','replaygain-track-peak'
 		self.taginject.props.tags = ','.join(['%s=%s' % (k,tags[k.replace('-','_')]) for k in rgtags])
 		
+
+class Main(object):
+	def __init__(self):
+		self.lib = library.library(library.DEFAULT_PATH)
+		self.configuration = ConfigParser.SafeConfigParser()
+		self.configuration.read((
+			os.path.join(os.curdir, 'mcp.conf'),
+			'/home/ryan/Projects/mcp/mcp.conf',
+		))
+		
+		self.player = Player(self.configuration, self.lib)
+		self.gui = GUI()
+		
+		self.commandmap = {
+			'fullscreen': self.gui.toggle_fullscreen,
+			'next': self.player.next,
+			'play-pause': self.player.play_pause,
+			'play': self.player.play,
+			'pause': self.player.pause,
+			'stop': self.player.stop,
+			'previous': self.player.previous,
+			'controls': self.gui.toggle_controls,
+			'forward-near': lambda:self.player.seek(15*gst.SECOND, False, False),
+			'forward-far': lambda:self.player.seek(60*gst.SECOND, False, False),
+			'beginning': lambda:self.player.seek(0, True, True),
+			'end': lambda:self.player.seek(self.player.get_duration(), True, False),
+			'back-near': lambda:self.player.seek(-15*gst.SECOND, False, False),
+			'back-far': lambda:self.player.seek(-60*gst.SECOND, False, False),
+			'volume-up': lambda:self.player.set_volume(.05, False),
+			'volume-down': lambda:self.player.set_volume(-.05, False),
+			'mute': lambda:self.player.set_volume(0, True),
+			'menu': self.gui.toggle_menu,
+			'show-menu': self.gui.show_menu,
+			'hide-menu': self.gui.hide_menu,
+		}
+		
+		self.gui.connect('play-pause', lambda b:self.player.play_pause())
+		self.gui.connect('next', lambda b:self.player.next())
+		self.gui.connect('previous', lambda b:self.player.previous())
+		self.gui.connect('position', lambda a,t,v:self.player.seek(v, absolute=True, percent=False))
+		self.gui.connect('volume', lambda b,s,v:self.player.set_volume(v))
+		self.gui.connect('destroy', self.on_destroy)
+		self.gui.connect('clicked', self.on_movie_window_clicked)
+		#self.gui.connect('xid-request', self.gui.on_xid_request, self.player.video_sink)
+		self.player.window = self.gui.videobox.movie_window
+		self.player.connect('eos', self.on_eos)
+		self.player.connect('error', self.on_error)
+		self.player.connect('state-changed', self.gui.on_state_changed)
+		self.player.connect('application', self.gui.videobox.update)
+		
+		self.console = ConsoleThread()
+		self.keymap = KeyMap(self.configuration, self.commandmap)
+		self.keymap.setup_console(self.console)
+		self.keymap.setup_gtk_window(self.gui.videobox)
+		
+		self.server = NetThread(self.configuration, self.commandmap)
+		
+	def start(self):
+		gtk.gdk.threads_init()
+		
+		self.server.start()
+		self.console.start()
+		
+		self.player.next()
+		
+		signal.signal(signal.SIGINT, lambda s,f: self.quit())
+		gtk.main()
+		
 	def quit(self):
-		self.player.set_state('null')
+		self.player.stop()
 		gtk.main_quit()
 		
-	def update(self):
-		try:
-			self.buttons.set_position(self.get_position())
-			self.buttons.set_duration(self.get_duration())
-			self.buttons.slider.queue_draw()
-			self.buttons.set_volume(self.get_volume())
-		finally:
-			return True
-			
 	def on_movie_window_clicked(self, window, event):
 		if event.type == gtk.gdk.BUTTON_PRESS and event.button == 3:
 			self.show_menu()
 		elif event.type == gtk.gdk._2BUTTON_PRESS and event.button == 1:
 			self.toggle_fullscreen()
-		
-	def on_about_to_finish(self, player):
-		debug('about to finish')
-		self.load(self.playlist.next())
-		
-	def on_window_state_event(self, window, event):
-		if event.changed_mask & gtk.gdk.WINDOW_STATE_FULLSCREEN:
-			self.win.__fullscreen = bool(event.new_window_state & gtk.gdk.WINDOW_STATE_FULLSCREEN)
-		
-	def on_expose_event(self, window, event, sink):
-		sink.set_xwindow_id(window.window.xid)
-		
-	def on_state_changed(self, bus, message):
-		old, new, pending = message.parse_state_changed()
-		playing = (new == gst.STATE_PLAYING)
-		self.buttons.widgets['play-pause'].set_stock_id(gtk.STOCK_MEDIA_PAUSE if playing else gtk.STOCK_MEDIA_PLAY)
-		
-	def on_tag(self, bus, message):
-		for k in message.structure.keys():
-			print k, '=', message.structure[k]
 		
 	def on_eos(self, bus, message):
 		debug('eos')
@@ -450,4 +524,5 @@ class Main(object):
 		
 	def on_destroy(self, *args):
 		self.quit()
+		
 
