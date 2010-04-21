@@ -7,7 +7,8 @@ import sqlite3
 import threading
 import traceback
 
-import gst, gobject
+from player import *
+import gobject
 
 VERBOSE = True
 

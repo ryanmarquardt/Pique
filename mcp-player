@@ -16,13 +16,17 @@ def my_callback(option, opt_str, value, parser):
 		print uri
 		m.playlist.append(uri)
 
-parser.add_option('--album', callback=my_callback, action="callback", type="string", help="Include all songs in ALBUM in the playlist")
-parser.add_option('--artist', callback=my_callback, action="callback", type="string", help="Include all songs by ARTIST in the playlist")
-parser.add_option('--genre', callback=my_callback, action="callback", type="string", help="Include all songs in GENRE in the playlist")
+parser.add_option('--album', callback=my_callback, action="callback",
+  type="string", help="Include all songs in ALBUM in the playlist")
+parser.add_option('--artist', callback=my_callback, action="callback",
+  type="string", help="Include all songs by ARTIST in the playlist")
+parser.add_option('--genre', callback=my_callback, action="callback",
+  type="string", help="Include all songs in GENRE in the playlist")
+
 options, args = parser.parse_args()
 
 for a in args:
-	m.player.playlist.append(library.uri(a))
+	m.player.playlist.append(uri(a))
 
 m.start()
 print
