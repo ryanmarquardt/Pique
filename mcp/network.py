@@ -28,4 +28,7 @@ class NetThread(thread.BgThread):
 		while True:
 			conn, addr = sock.accept()
 			ConnectionThread(commandmap, conn, addr).start()
+			
+	def quit(self):
+		pass
 	

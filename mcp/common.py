@@ -1,9 +1,10 @@
+import sys
 import threading
 
 DEBUG = True
 def debug(*args):
 	if DEBUG:
-		print '%s: %s' % (threading.currentThread().name, ' '.join(map(str,args)))
+		print >>sys.stderr, '%s: %s' % (threading.currentThread().name, ' '.join(map(str,args)))
 
 TIME_FORMAT='hms'
 
@@ -11,11 +12,11 @@ SECOND = 1e9
 
 class Time(long):
 	@classmethod
-	def from_ns(cls, ns):
+	def FromNS(cls, ns):
 		return Time(ns)
 		
 	@classmethod
-	def from_s(cls, s):
+	def FromSec(cls, s):
 		return Time(s*SECOND)
 		
 	def __repr__(self):

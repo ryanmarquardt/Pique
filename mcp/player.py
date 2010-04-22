@@ -30,6 +30,10 @@ class PlayThread(BgThread):
 			update()
 			time.sleep(frequency)
 
+STATE_PLAYING = 'playing'
+STATE_PAUSED = 'paused'
+STATE_STOPPED = 'stopped'
+
 class Player(object):
 	def __init__(self, config, lib, pl):
 		self.lib = lib
@@ -54,15 +58,20 @@ class Player(object):
 		
 		self.last_update = ()
 		self.updatethread = PlayThread(self.emit_update, 0.1)
+		
+	def start(self):
 		self.updatethread.start()
+		self.next()
+		
+	def quit(self):
+		self.stop()
 		
 	def emit_update(self):
 		try:
 			pos, dur = self.get_position(), self.get_duration()
 			if (pos,dur) != self.last_update:
 				self.last_update = pos,dur
-				debug(pos, dur)
-				struct = gst.structure_from_string('update,position=%d,duration=%d' % (pos,dur))
+				struct = gst.structure_from_string('update,position=(gint64)%d,duration=(gint64)%d' % (pos,dur))
 				m = gst.message_new_custom(gst.MESSAGE_APPLICATION, self.player, struct)
 				self.bus.post(m)
 		except:
@@ -85,17 +94,36 @@ class Player(object):
 	def refresh_xid(self, widget=None, event=None):
 		if self._window is not None:
 			self.video_sink.set_xwindow_id(self._window.window.xid)
+			
+	def on_state_changed(self, bus, message, callback, *args):
+		_, new, _ = message.parse_state_changed()
+		if new == gst.STATE_PLAYING:
+			callback(STATE_PLAYING, *args)
+		elif new == gst.STATE_NULL:
+			callback(STATE_STOPPED, *args)
+		elif new == gst.STATE_PAUSED:
+			callback(STATE_PAUSED, *args)
+			
+	def on_update(self, bus, message, cb):
+		func, args, kwargs = cb
+		pos = message.structure['position']
+		dur = message.structure['duration']
+		return func(pos, dur, *args, **kwargs)
 		
-	def connect(self, which, *args):
-		debug('player.connect', which, args)
-		self.bus.connect('message::%s' % which, *args)
+	def connect(self, which, func, *args, **kwargs):
+		debug(which, *args)
+		if which == 'state-changed':
+			self.bus.connect('message::state-changed', self.on_state_changed, func, *args)
+		elif which == 'update':
+			self.bus.connect('message::application', self.on_update, (func, args, kwargs))
+		else:
+			self.bus.connect('message::%s' % which, func, *args)
 	
-	def seek(self, new, absolute=True, percent=False):
-		format = gst.FORMAT_PERCENT if percent else gst.FORMAT_TIME
+	def seek(self, new, absolute=True):
 		if not absolute:
 			new = max(0, new + self.get_position(percent=percent))
-		debug('seek', format, new, absolute, percent)
-		self.player.seek_simple(format, gst.SEEK_FLAG_FLUSH, new)
+		debug('seek', new)
+		self.player.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, new)
 	
 	def isplaying(self):
 		return self.player.get_state()[1] == gst.STATE_PLAYING
