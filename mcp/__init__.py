@@ -24,6 +24,7 @@ class Main(object):
 		self.gui = GUI()
 		
 		self.commandmap = {
+			'quit': self.quit,
 			'fullscreen': self.gui.toggle_fullscreen,
 			'next': self.player.next,
 			'play-pause': self.player.play_pause,
@@ -67,8 +68,6 @@ class Main(object):
 		self.console.set_keymap(self.keymap)
 		
 	def start(self):
-		signal.signal(signal.SIGINT, lambda s,f: self.quit())
-		
 		self.server.start()
 		self.console.start()
 		self.player.start()

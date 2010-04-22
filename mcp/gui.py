@@ -21,11 +21,14 @@ class VideoBox(gtk.VBox):
 		self.next.get_child().unset_flags(gtk.CAN_FOCUS)
 		
 		self.position = gtk.Adjustment(step_incr=Time.FromSec(15),page_incr=Time.FromSec(60))
+		
+		self.scale = gtk.HScale(self.position)
+		self.scale.connect('format-value', self.on_format_time)
+		self.scale.unset_flags(gtk.CAN_FOCUS)
+		
 		self.slider = gtk.ToolItem()
 		self.slider.set_expand(True)
-		self.slider.add(gtk.HScale(self.position))
-		self.slider.get_child().connect('format-value', self.on_format_time)
-		self.slider.get_child().unset_flags(gtk.CAN_FOCUS)
+		self.slider.add(self.scale)
 		
 		self.volume = gtk.ToolItem()
 		self.volume.add(gtk.VolumeButton())
@@ -51,14 +54,21 @@ class VideoBox(gtk.VBox):
 		self.menu = gtk.VBox()
 		self.menu.pack_end(self.tracklist)
 		
-		self.sidebar = gtk.HPaned()
-		self.sidebar.pack1(self.menu)
-		self.sidebar.pack2(self.movie_window)
-		self.sidebar.set_position(200)
+		#self.sidebar = gtk.HPaned()
+		#self.sidebar.pack1(self.menu)
+		#self.sidebar.pack2(self.movie_window)
+		#self.sidebar.set_position(200)
 		
 		gtk.VBox.add_events(self, gtk.gdk.BUTTON_PRESS_MASK)
-		gtk.VBox.pack_start(self, self.sidebar, True, True)
+		gtk.VBox.pack_start(self, self.movie_window, True, True)
 		gtk.VBox.pack_start(self, self.buttons, False, False)
+		
+	def set_keymap(self, keymap):
+		debug('set keymap')
+		self.movie_window.add_events(gtk.gdk.KEY_PRESS_MASK)
+		self.movie_window.set_flags(gtk.CAN_FOCUS)
+		self.movie_window.connect('key-press-event',
+		  lambda w,e:keymap.interpret(gtk.accelerator_name(e.keyval, e.state)))
 		
 	signals = 'play-pause', 'previous', 'next', 'position', 'xid-request', 'clicked'
 	def connect(self, which, callback, *args, **kwargs):
@@ -99,7 +109,6 @@ class VideoBox(gtk.VBox):
 			self.play_pause.set_stock_id(gtk.STOCK_MEDIA_PLAY)
 
 	def update_time(self, position, duration):
-		debug('update', position, duration)
 		try:
 			self.position.set_value(position)
 			self.position.set_upper(duration)
@@ -108,13 +117,6 @@ class VideoBox(gtk.VBox):
 			traceback.print_exc()
 		finally:
 			return True
-	
-def add_accel(self, gtkaccel, func):
-	key, mod = gtk.accelerator_parse(gtkaccel)
-	debug(gtkaccel, key, mod, func.__name__)
-	self.accelgroup.connect_group(key, mod, gtk.ACCEL_VISIBLE,
-	  lambda g,w,k,m:(func(),))
-parse = gtk.accelerator_parse
 	
 def connect_accel(acg, name, func):
 	k,m = gtk.accelerator_parse(name)
@@ -162,10 +164,7 @@ class GUI(gtk.Window):
 			gtk.Window.connect(self, which, *args)
 		
 	def set_keymap(self, keymap):
-		self.videobox.add_events(gtk.gdk.KEY_PRESS_MASK)
-		self.videobox.set_flags(gtk.CAN_FOCUS)
-		self.videobox.connect('key-press-event',
-		  lambda w,e:keymap.interpret(gtk.accelerator_name(e.keyval, e.state)))
+		self.videobox.set_keymap(keymap)
 		
 	def on_movie_window_clicked(self, event):
 		if event.type == gtk.gdk.BUTTON_PRESS and event.button == 3:
@@ -176,10 +175,6 @@ class GUI(gtk.Window):
 	def on_window_state_event(self, window, event):
 		if event.changed_mask & gtk.gdk.WINDOW_STATE_FULLSCREEN:
 			self.__fullscreen = bool(event.new_window_state & gtk.gdk.WINDOW_STATE_FULLSCREEN)
-		
-	#def on_state_changed(self, bus, message):
-		#old, new, pending = message.parse_state_changed()
-		#self.videobox.update_state(new)
 		
 	def fullscreen(self):
 		gtk.Window.fullscreen(self)
@@ -202,7 +197,7 @@ class GUI(gtk.Window):
 		self.videobox.buttons.hide()
 		
 	def toggle_controls(self):
-		if self.buttons.get_property('visible'):
+		if self.videobox.buttons.get_property('visible'):
 			self.hide_controls()
 		else:
 			self.show_controls()

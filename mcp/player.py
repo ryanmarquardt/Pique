@@ -111,7 +111,6 @@ class Player(object):
 		return func(pos, dur, *args, **kwargs)
 		
 	def connect(self, which, func, *args, **kwargs):
-		debug(which, *args)
 		if which == 'state-changed':
 			self.bus.connect('message::state-changed', self.on_state_changed, func, *args)
 		elif which == 'update':

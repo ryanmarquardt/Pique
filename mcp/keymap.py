@@ -1,3 +1,4 @@
+from common import *
 
 class KeyMap(object):
 	def __init__(self, config, commandmap):
@@ -12,4 +13,8 @@ class KeyMap(object):
 			func = self.commandmap[self.keys[key.lower()]]
 			return func()
 		except KeyError:
-			debug('No key binding for', key)
+			try:
+				func = self.commandmap[key.lower()]
+				return func()
+			except KeyError:
+				debug('No key binding for', key)
