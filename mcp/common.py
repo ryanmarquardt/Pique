@@ -4,7 +4,12 @@ import threading
 DEBUG = True
 def debug(*args):
 	if DEBUG:
-		print >>sys.stderr, '%s: %s' % (threading.currentThread().name, ' '.join(map(str,args)))
+		print >>sys.stderr, threading.currentThread().name + ':', ' '.join(map(str,args))
+
+VERBOSE = True
+def verbose(*args):
+	if VERBOSE:
+		print >>sys.stderr, ' '.join(map(str,args))
 
 TIME_FORMAT='hms'
 
@@ -33,15 +38,3 @@ class Time(long):
 		elif f == 's.':
 			return '%f' % (self / float(SECOND))
 			
-class Toggle(object):
-	def __init__(self, get, set, unset):
-		self.__nonzero__ = get
-		self.set = set
-		self.unset = unset
-	
-	def switch(self):
-		if self:
-			self.unset()
-		else:
-			self.set()
-		

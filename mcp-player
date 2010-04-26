@@ -1,12 +1,19 @@
 #!/usr/bin/env python
 
-from mcp import *
 import optparse
+import sys
 
-sys.argv = ['mcp-library'] + \
-['file:///home/ryan/Videos/Family Guy/%s' % f for f in os.listdir('/home/ryan/Videos/Family Guy')]
+args = sys.argv
+sys.argv = []
 
-parser = optparse.OptionParser(usage="%prog [songlist ...]", version="%prog 0:01")
+from mcp import *
+
+sys.argv = args
+
+#sys.argv = ['mcp-library'] + \
+#['file:///home/ryan/Videos/Family Guy/%s' % f for f in os.listdir('/home/ryan/Videos/Family Guy')]
+
+parser = optparse.OptionParser(usage="%prog [songlist ...]", version="%%prog %s" % VERSION)
 
 m = Main()
 

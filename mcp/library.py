@@ -8,7 +8,6 @@ import threading
 import traceback
 
 from player import *
-import gobject
 
 VERBOSE = True
 
@@ -27,6 +26,7 @@ COLUMNS = [
 	('audio_codec','text'),
 	('duration','real'),
 ]
+columns = [i[0] for i in COLUMNS]
 
 Row = collections.namedtuple('Row', [i[0] for i in COLUMNS])
 
@@ -41,28 +41,6 @@ DELETE_SQL = u'delete from %s where uri=?' % TABLE_NAME
 
 from common import *
 
-Element = gst.element_factory_make
-def Bin(*elements):
-	#elements = [e if not isinstance(e,str) else Element(e) for e in elements]
-	bin = gst.Bin()
-	if len(elements):
-		bin.add(*elements)
-		if len(elements)-1:
-			gst.element_link_many(*elements)
-		for t,d,i in (('sinks',gst.PAD_SINK,0),('srcs',gst.PAD_SRC,-1)):
-			j = 0
-			for pad in elements[i].pads():
-				if pad.props.direction == d:
-					bin.add_pad(gst.GhostPad(t[:-1] + str(j), pad))
-					j+=1
-	return bin
-	
-def GstError(error, debug):
-	if error.domain == 'gst-resource-error-quark':
-		if error.code == 3:
-			return IOError(debug.split('\n',1)[1])
-	return Exception(error.code, error.domain, error.message, debug)
-	
 def gsub(func):
 	main = gobject.MainLoop()
 	def f(*args):
@@ -129,6 +107,7 @@ class library(collections.MutableMapping):
 		t = threading.currentThread()
 		if t not in self.__db:
 			self.__db[t] = sqlite3.connect(self.path)
+		self.__db[t].create_function('regexp', 2, lambda x,i:bool(re.match(x,i)))
 		return self.__db[t]
 
 	def init(self):
@@ -136,7 +115,7 @@ class library(collections.MutableMapping):
 		c.execute('drop table media')
 		c.execute(CREATE_SQL)
 		self.db.commit()
-		if VERBOSE: print "Successfully initialized library at %r" % self.path
+		verbose("Successfully initialized library at", repr(self.path))
 		
 	def __iter__(self):
 		debug('__iter__')
@@ -172,17 +151,23 @@ class library(collections.MutableMapping):
 		self.db.cursor().execute(DELETE_SQL, (uri,))
 		self.db.commit()
 		
-	def add(self, uri):
-		self.addmany((uri,))
-		
 	@gsub
-	def addmany(self, uris, force=False):
+	def add(self, files, force=False, **kwargs):
+		uris = []
+		for i in files:
+			if os.path.isdir(i):
+				for root,dirs,files in os.walk(i):
+					uris.extend([uri(os.path.join(root,f)) for f in files])
+					#for f in files:
+						#uris.append(uri((os.path.join(root,f))))
+			else:
+				uris.append(uri(i))
 		tagger = tag_reader()
 		for uri in uris:
 			if not force and unicode(uri) in self:
-				print >> sys.stderr, 'Skipping', uri
+				verbose('Skipping', uri)
 			else:
-				if VERBOSE: print 'Adding', uri
+				verbose('Adding', uri)
 				tags = collections.defaultdict(lambda:None, tagger(uri, normalize=True))
 				print '{\n\t%s\n}' % ',\n\t'.join(["%r: %r" % item for item in sorted(tags.items())])
 				tags['uri'] = uri
@@ -193,7 +178,7 @@ class library(collections.MutableMapping):
 				NewRow = Row(**rowtags)
 				self[NewRow.uri] = NewRow
 				self.db.commit()
-		
+
 	def members(self, column):
 		c = self.db.cursor()
 		if column in [i[0] for i in COLUMNS]:
@@ -209,42 +194,38 @@ class library(collections.MutableMapping):
 			
 	def select_uris(self, **kwargs):
 		c = self.db.cursor()
-		c.execute('select uri from %s where' % TABLE_NAME + ','.join(['%s=?' for k in kwargs.keys()]), kwargs.values())
+		if kwargs:
+			sql = 'select uri from %s where ' % TABLE_NAME + \
+			  ','.join([k + ' regexp ?' for k in kwargs.keys()])
+		else:
+			sql = 'select uri from %s' % TABLE_NAME
+		c.execute(sql, kwargs.values())
 		for i in c:
 			yield i[0]
+			
+	def update(self, uri, **kwargs):
+		c = self.db.cursor()
+		sql = 'update or abort %s set %s where uri=?' % (
+		  TABLE_NAME,
+		  ','.join(['%s=?' % k for k in kwargs.keys()]),
+		)
+		#print sql, kwargs.values() + [uri,]
+		if kwargs:
+			c.execute(sql, kwargs.values() + [uri,])
+			self.db.commit()
 
-def uri(path):
-	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://%s' % os.path.abspath(path)
-
-if __name__=='__main__':
-	import sys
-	
-	l = library(DEFAULT_PATH)
-	
-	if sys.argv[1] == 'init':
-		l.init()
-	elif sys.argv[1] == 'add':
-		uris = []
-		for i in sys.argv[2:]:
-			if os.path.isdir(i):
-				for root,dirs,files in os.walk(i):
-					for f in files:
-						uris.append(uri((os.path.join(root,f))))
-			else:
-				uris.append(uri(i))
-		l.addmany(uris, True)
-	elif sys.argv[1] == 'list':
-		if len(sys.argv) < 3:
-			for uri in l:
-				print uri
+class uri(tuple):
+	def __new__(self, path):
+		if re.match('[a-zA-Z0-9]+://.*', path):
+			return tuple(path.partition('://')[0::2])
 		else:
-			for row in l.members(sys.argv[2]):
-				print row
-	elif sys.argv[1] == 'update':
-		id = sys.argv[2]
-		
-	elif sys.argv[1] == 'find':
-		pass
-	else:
-		print 'Error: No command specified'
-		exit(1)
+			return 'file', path
+
+	def __str__(self):
+		return '%s://%s' % self
+
+	@property
+	def protocol(self):
+		return self[0]
+
+__all__ = ['uri', 'library', 'tag_reader', 'gsub', 'DEFAULT_PATH']

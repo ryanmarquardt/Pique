@@ -1,3 +1,5 @@
+VERSION = '0.01'
+
 import ConfigParser
 import os
 import signal

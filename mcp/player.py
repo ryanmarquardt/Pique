@@ -1,6 +1,12 @@
+import sys
+args,sys.argv = sys.argv,[]
+
 import pygst
 pygst.require('0.10')
 import gst
+import gobject
+
+sys.argv = args
 
 import time
 import traceback
@@ -23,7 +29,12 @@ def Bin(*elements):
 					j+=1
 	return bin
 	
-
+def GstError(error, debug):
+	if error.domain == 'gst-resource-error-quark':
+		if error.code == 3:
+			return IOError(debug.split('\n',1)[1])
+	return Exception(error.code, error.domain, error.message, debug)
+	
 class PlayThread(BgThread):
 	def main(self, update, frequency=0.1):
 		while True:

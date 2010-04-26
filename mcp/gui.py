@@ -1,8 +1,12 @@
 from common import *
+import sys
+args, sys.argv = sys.argv, []
 
 import pygtk
 import gtk
 import gobject
+
+sys.argv = args
 
 class VideoBox(gtk.VBox):
 	def __init__(self):
