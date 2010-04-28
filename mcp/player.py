@@ -8,6 +8,7 @@ import gobject
 
 sys.argv = args
 
+import Queue
 import time
 import traceback
 
@@ -204,3 +205,63 @@ class Player(object):
 		rgtags = 'replaygain-reference-level','replaygain-track-gain','replaygain-track-peak'
 		self.taginject.props.tags = ','.join(['%s=%s' % (k,tags[k.replace('-','_')]) for k in rgtags])
 		
+def gsub(func):
+	main = gobject.MainLoop()
+	q = Queue.Queue()
+	def f(args,kwargs):
+		try:
+			r = func(*args, **kwargs)
+		except Exception, e:
+			q.put(e)
+		else:
+			q.put(r)
+		finally:
+			main.quit()
+	def g(*args, **kwargs):
+		gobject.idle_add(f, args, kwargs)
+		main.run()
+		r = q.get()
+		if isinstance(r, Exception):
+			raise r
+		else:
+			return r
+	return g
+	
+class tag_reader(object):
+	def __init__(self):
+		self.playbin = Element('playbin')
+		self.playbin.set_property('audio-sink', Bin(Element('rganalysis'), Element('fakesink')))
+		self.playbin.set_property('video-sink', Element('fakesink'))
+		
+	def on_update(self):
+		sys.stdout.write('.')
+		sys.stdout.flush()
+		
+	@gsub
+	def __call__(self, uri, update_callback=None, update_frequency=1, normalize=True):
+		try:
+			self.playbin.set_property('uri', uri)
+			tags = {}
+			self.playbin.set_state('playing')
+			bus = self.playbin.get_bus()
+			while True:
+				msg = bus.poll(gst.MESSAGE_ANY, update_frequency*gst.SECOND)
+				if msg is None:
+					if update_callback:
+						update_callback()
+					continue
+				elif msg.type & gst.MESSAGE_EOS:
+					break
+				elif msg.type & gst.MESSAGE_ERROR:
+					raise GstError(*msg.parse_error())
+				elif not normalize and msg.type & gst.MESSAGE_ASYNC_DONE:
+					break
+				elif msg.type & gst.MESSAGE_TAG:
+					taglist = msg.parse_tag()
+					for k in taglist.keys():
+						tags[k.replace('-','_')] = taglist[k]
+			tags['duration'] = self.playbin.query_duration(gst.FORMAT_TIME, None)[0]
+		finally:
+			self.playbin.set_state('null')
+			print tags
+			return tags

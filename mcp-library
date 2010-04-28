@@ -47,27 +47,27 @@ def init(l, input, options, args):
 	l.init()
 
 def select(l, input, options, args):
-	kwargs = dict((k,getattr(options,k)) for k in mcp.library.columns if hasattr(options, k) and getattr(options,k) is not None)
+	kwargs = dict((k,getattr(options,k)) for k in mcp.library.Columns(names_only=True) if hasattr(options, k) and getattr(options,k) is not None)
 	for uri in input:
 		print uri
 	for uri in l.select_uris(**kwargs):
 		print uri
 
 def add(l, input, options, args):
-	kwargs = dict((k,getattr(options,k)) for k in mcp.library.columns if hasattr(options, k) and getattr(options,k) is not None)
+	kwargs = dict((k,getattr(options,k)) for k in mcp.library.Columns(names_only=True) if hasattr(options, k) and getattr(options,k) is not None)
 	l.add(args, **kwargs)
 
 def list(l, input, options, args):
 	if not len(args):
 		abort('Need a category')
-	elif args[0] not in mcp.library.columns:
+	elif args[0] not in mcp.library.Columns(names_only=True):
 		abort('Invalid category name')
 	for row in l.members(args[0]):
 		if row is not None:
 			print row
 		
 def update(l, input, options, args):
-	kwargs = dict((k,getattr(options,k)) for k in mcp.library.columns if hasattr(options, k) and getattr(options,k) is not None)
+	kwargs = dict((k,getattr(options,k)) for k in mcp.library.Columns(names_only=False) if hasattr(options, k) and getattr(options,k) is not None)
 	for uri in input:
 		l.update(uri, **kwargs)
 
@@ -105,7 +105,7 @@ Adds URIs or PATHs to the library.'''
 	elif cmd == 'list':
 		list_usage = '''%%prog list CATEGORY\n
 Lists all members of CATEGORY in the database. CATEGORY must be one of:
-%s.''' % ', '.join(mcp.library.columns)
+%s.''' % ', '.join(mcp.library.Columns(names_only=False))
 		list(*parse(list_usage))
 	elif cmd == 'update':
 		update_options = optparse.OptionGroup(parser, 'Update Options')
