@@ -14,17 +14,20 @@ description=
 run_cmd=./mcp-player
 
 [files]
-current_page=5
+current_page=15
 FILE_NAME_0=582;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp-player;0
-FILE_NAME_1=16;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/__init__.py;0
+FILE_NAME_1=52;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/__init__.py;0
 FILE_NAME_2=184;Conf;0;16;1;1;0;/home/ryan/Projects/mcp/mcp.conf;0
 FILE_NAME_3=154;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/common.py;0
-FILE_NAME_4=5662;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/player.py;0
-FILE_NAME_5=1303;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/library.py;0
+FILE_NAME_4=3452;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/player.py;0
+FILE_NAME_5=2299;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/library.py;0
 FILE_NAME_6=1135;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/gui.py;0
 FILE_NAME_7=444;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/console.py;0
 FILE_NAME_8=429;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/keymap.py;0
 FILE_NAME_9=382;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/network.py;0
 FILE_NAME_10=1801;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/rawtty.py;0
 FILE_NAME_11=0;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/thread.py;0
-FILE_NAME_12=2536;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp-library;0
+FILE_NAME_12=1902;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp-library;0
+FILE_NAME_13=367;Conf;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/table-def.conf;0
+FILE_NAME_14=862;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/playlist.py;0
+FILE_NAME_15=107;Python;0;16;1;1;0;/home/ryan/Projects/mcp/mcp/sqlite.py;0

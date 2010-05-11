@@ -12,7 +12,7 @@ from player import tag_reader
 
 DEFAULT_PATH = os.path.expanduser('~/.mcp-library')
 Versions = [
-	#'media_001',
+	'media_001',
 	'media',
 ]
 TABLE_VERSION = Versions[0]
@@ -28,7 +28,6 @@ def Columns(version=TABLE_VERSION, names_only=False):
 def Row(version=TABLE_VERSION):
 	return collections.namedtuple('Row', Columns(version=version, names_only=True))
 
-DROP_TABLE = u'drop table %s' % TABLE_VERSION
 CREATE_TABLE = u"create table %s (%s) " % (TABLE_VERSION, ", ".join(["%s %s" % i[0:2] for i in Columns()]))
 INSERT = u"insert or replace into %s values (%s) " % (TABLE_VERSION, ",".join("?"*len(Columns())))
 ORDER = u"order by artist,album,track_number "
@@ -38,7 +37,7 @@ SELECT_URI = u'select uri from %s ' % TABLE_VERSION
 DELETE = u'delete from %s where uri=?' % TABLE_VERSION
 
 def select(c, which, **where):
-	sql = 'select %s from %s' % (which,TABLE_NAME)
+	sql = 'select %s from %s' % (which,TABLE_VERSION)
 	if where:
 		sql += ' where ' + ','.join(['%s=?' % k for k in where])
 	print sql
@@ -69,7 +68,7 @@ class library(collections.MutableMapping):
 
 	def init(self):
 		c = self.db.cursor()
-		c.execute(DROP_TABLE)
+		c.execute(u'drop table %s' % TABLE_VERSION)
 		c.execute(CREATE_TABLE)
 		self.db.commit()
 		verbose("Successfully initialized library at", repr(self.path))
@@ -131,9 +130,10 @@ class library(collections.MutableMapping):
 	def members(self, column):
 		c = self.db.cursor()
 		if column in Columns(names_only=True):
+			debug('select distinct %s from %s' % (column, TABLE_VERSION))
 			c.execute('select distinct %s from %s' % (column,TABLE_VERSION))
-		for i in c:
-			yield i[0]
+			for i in c:
+				yield i[0]
 		
 	def select(self, **kwargs):
 		c = self.db.cursor()
@@ -162,5 +162,25 @@ class library(collections.MutableMapping):
 		if kwargs:
 			c.execute(sql, kwargs.values() + [uri,])
 			self.db.commit()
+			
+def upgrade(src=Versions[-1], dst=Versions[0], path=DEFAULT_PATH):
+	db = sqlite3.connect(path)
+	A = db.cursor()
+	B = db.cursor()
+	try:
+		B.execute('drop table %s' % dst)
+		B.execute(u"create table %s (%s) " % (dst, ", ".join(["%s %s" % i for i in Columns(dst)])))
+		A.execute('select %s from %s' % (','.join(Columns(src,names_only=True)),src))
+		for row in A:
+			print row
+			old = Row(src)(*row)._asdict()
+			print old
+			B.execute('insert into %s (%s) values (%s)' % (dst, ','.join(old.keys()), ','.join('?'*len(old))), old.values())
+			print
+			#B.execute('insert into %s values %s' % (dst, ','.join('?'*len(Columns(dst)))), row)
+	finally:
+		A.close()
+		B.close()
+		db.commit()
 
-__all__ = ['uri', 'library', 'tag_reader', 'gsub', 'DEFAULT_PATH']
+__all__ = ['uri', 'library', 'tag_reader', 'gsub', 'DEFAULT_PATH', 'upgrade']

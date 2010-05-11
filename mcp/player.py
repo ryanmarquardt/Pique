@@ -73,7 +73,10 @@ class Player(object):
 		
 	def start(self):
 		self.updatethread.start()
-		self.next()
+		try:
+			self.next()
+		except StopIteration:
+			pass
 		
 	def quit(self):
 		self.stop()
@@ -122,11 +125,17 @@ class Player(object):
 		dur = message.structure['duration']
 		return func(pos, dur, *args, **kwargs)
 		
+	def on_error(self, bus, message, cb):
+		func, args, kwargs = cb
+		return func(message.parse_error(), *args, **kwargs)
+		
 	def connect(self, which, func, *args, **kwargs):
 		if which == 'state-changed':
 			self.bus.connect('message::state-changed', self.on_state_changed, func, *args)
 		elif which == 'update':
 			self.bus.connect('message::application', self.on_update, (func, args, kwargs))
+		elif which == 'error':
+			self.bus.connect('message::error', self.on_error, (func, args, kwargs))
 		else:
 			self.bus.connect('message::%s' % which, func, *args)
 	
@@ -195,8 +204,9 @@ class Player(object):
 		try:
 			self.load(self.playlist.next())
 		except StopIteration:
-			return
-		self.play()
+			raise StopIteration
+		else:
+			self.play()
 			
 	def load(self, uri):
 		debug('load', uri)

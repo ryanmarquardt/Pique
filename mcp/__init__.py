@@ -35,6 +35,7 @@ class Main(object):
 			'stop': self.player.stop,
 			'previous': self.player.previous,
 			'controls': self.gui.toggle_controls,
+			'seek': lambda pos:self.player.seek(pos*SECOND, False),
 			'forward-near': lambda:self.player.seek(15*SECOND, False),
 			'forward-far': lambda:self.player.seek(60*SECOND, False),
 			'beginning': lambda:self.player.seek(0, True),
@@ -47,6 +48,10 @@ class Main(object):
 			'menu': self.gui.toggle_menu,
 			'show-menu': self.gui.show_menu,
 			'hide-menu': self.gui.hide_menu,
+			'playlist-load': self.playlist.load,
+			'playlist-clear': self.playlist.clear,
+			'playlist-repeat': self.playlist.set_repeat,
+			'playlist-random': self.playlist.set_random,
 		}
 		
 		self.keymap = KeyMap(conf, self.commandmap)
@@ -86,9 +91,8 @@ class Main(object):
 		self.player.next()
 		
 	def on_error(self, error):
+		debug('Error:', *error)
 		self.player.stop()
-		err, debug = message.parse_error()
-		print "Error: %s" % err, debug
 		
 	def on_destroy(self, *args):
 		self.quit()

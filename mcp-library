@@ -105,7 +105,7 @@ Adds URIs or PATHs to the library.'''
 	elif cmd == 'list':
 		list_usage = '''%%prog list CATEGORY\n
 Lists all members of CATEGORY in the database. CATEGORY must be one of:
-%s.''' % ', '.join(mcp.library.Columns(names_only=False))
+%s.''' % ', '.join(mcp.library.Columns(names_only=True))
 		list(*parse(list_usage))
 	elif cmd == 'update':
 		update_options = optparse.OptionGroup(parser, 'Update Options')
