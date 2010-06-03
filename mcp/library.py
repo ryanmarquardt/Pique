@@ -130,8 +130,9 @@ class library(collections.MutableMapping):
 	def members(self, column):
 		c = self.db.cursor()
 		if column in Columns(names_only=True):
-			debug('select distinct %s from %s' % (column, TABLE_VERSION))
-			c.execute('select distinct %s from %s' % (column,TABLE_VERSION))
+			sql = 'select distinct %s from %s' % (column, TABLE_VERSION)
+			debug(sql)
+			c.execute(sql)
 			for i in c:
 				yield i[0]
 		
@@ -158,7 +159,6 @@ class library(collections.MutableMapping):
 		  TABLE_VERSION,
 		  ','.join(['%s=?' % k for k in kwargs.keys()]),
 		)
-		#print sql, kwargs.values() + [uri,]
 		if kwargs:
 			c.execute(sql, kwargs.values() + [uri,])
 			self.db.commit()
@@ -177,7 +177,6 @@ def upgrade(src=Versions[-1], dst=Versions[0], path=DEFAULT_PATH):
 			print old
 			B.execute('insert into %s (%s) values (%s)' % (dst, ','.join(old.keys()), ','.join('?'*len(old))), old.values())
 			print
-			#B.execute('insert into %s values %s' % (dst, ','.join('?'*len(Columns(dst)))), row)
 	finally:
 		A.close()
 		B.close()

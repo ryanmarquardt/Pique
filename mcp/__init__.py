@@ -52,6 +52,7 @@ class Main(object):
 			'playlist-clear': self.playlist.clear,
 			'playlist-repeat': self.playlist.set_repeat,
 			'playlist-random': self.playlist.set_random,
+			'playlist-list': self.playlist.entries.__iter__,
 		}
 		
 		self.keymap = KeyMap(conf, self.commandmap)

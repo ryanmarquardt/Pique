@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+
+from mcp import *
+
+serv = client('localhost')
+serv.connect()
+result = serv.ask(*sys.argv[1:])
+print result
