@@ -11,6 +11,9 @@ class Playlist(object):
 		self.clear()
 		self.entries = tuple(uris)
 		
+	def add(self, uri):
+		self.entries = self.entries + (uri,)
+		
 	def _extend(self):
 		if self.random:
 			entries = list(self.entries)
@@ -54,6 +57,7 @@ class Playlist(object):
 	def clear(self):
 		self.history = collections.deque()
 		self.history.append(None)
+		self.entries = ()
 		
 	def set_repeat(self, yes=True):
 		self.repeat = yes

@@ -49,6 +49,7 @@ class Main(object):
 			'menu': self.gui.toggle_menu,
 			'show-menu': self.gui.show_menu,
 			'hide-menu': self.gui.hide_menu,
+			'playlist-add': self.playlist.add,
 			'playlist-load': self.playlist.load,
 			'playlist-clear': self.playlist.clear,
 			'playlist-repeat': self.playlist.set_repeat,

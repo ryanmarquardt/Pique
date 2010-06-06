@@ -235,9 +235,8 @@ class Player(object):
 		try:
 			self.load(self.playlist.next())
 		except StopIteration:
-			raise StopIteration
-		else:
-			self.play()
+			return
+		self.play()
 			
 	def load(self, uri):
 		debug('load', uri)

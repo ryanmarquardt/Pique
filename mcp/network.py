@@ -47,7 +47,7 @@ class ConnectionThread(thread.BgThread):
 				self.respond('Unknown Error', tb)
 				continue
 			else:
-				debug('OK')
+				debug('Responding with result', repr(result))
 				self.respond(None, result)
 		sock.close()
 		debug('disconnected')
