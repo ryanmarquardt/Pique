@@ -14,6 +14,7 @@ from player import Player
 from playlist import Playlist
 from gui import GUI
 from keymap import KeyMap
+from client import Client
 
 class Main(object):
 	def __init__(self):
@@ -52,7 +53,7 @@ class Main(object):
 			'playlist-clear': self.playlist.clear,
 			'playlist-repeat': self.playlist.set_repeat,
 			'playlist-random': self.playlist.set_random,
-			'playlist-list': self.playlist.entries.__iter__,
+			'playlist-list': lambda:'\n'.join(self.playlist.entries),
 		}
 		
 		self.keymap = KeyMap(conf, self.commandmap)

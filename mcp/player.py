@@ -9,11 +9,14 @@ import gobject
 sys.argv = args
 
 import Queue
+import threading
 import time
 import traceback
 
 from common import *
 from thread import BgThread
+
+TIMEOUT = 3
 
 Element = gst.element_factory_make
 def Bin(*elements):
@@ -30,11 +33,14 @@ def Bin(*elements):
 					j+=1
 	return bin
 	
-def GstError(error, debug):
-	if error.domain == 'gst-resource-error-quark':
-		if error.code == 3:
-			return IOError(debug.split('\n',1)[1])
-	return Exception(error.code, error.domain, error.message, debug)
+class Error(Exception):
+	def __init__(self, error, dbg):
+		debug('Error', error.code, error.domain, repr(error.message), repr(dbg))
+		if error.domain == 'gst-resource-error-quark':
+			if error.code == 3:
+				Exception.__init__(self, error.message)
+				return
+		Exception.__init__(self, error.code, error.domain, error.message, dbg)
 	
 class PlayThread(BgThread):
 	def main(self, update, frequency=0.1):
@@ -49,6 +55,7 @@ STATE_STOPPED = 'stopped'
 class Player(object):
 	def __init__(self, config, lib, pl):
 		self.lib = lib
+		self.state_change_lock = threading.Lock()
 		
 		self.taginject = Element('taginject')
 		audio_sink = Element(config.get('Gstreamer', 'audio-plugin'))
@@ -67,10 +74,33 @@ class Player(object):
 		self._window = None
 		self.bus.add_signal_watch()
 		self.bus.enable_sync_message_emission()
+		self.bus.connect('message::async-done', self.on_async_done)
+		self.connect('error', self.on_private_error)
 		
 		self.last_update = ()
+		self.last_error = None
+		self.state_change_pending = threading.Lock()
+		self.state_change_done = threading.Event()
 		self.updatethread = PlayThread(self.emit_update, 0.1)
 		
+	def on_private_error(self, error):
+		self.last_error = Error(*error)
+		self.state_change_done.set()
+		
+	def on_async_done(self, bus, message):
+		self.state_change_done.set()
+		self.last_error = None
+			
+	def set_state(self, state):
+		with self.state_change_pending:
+			self.state_change_done.clear()
+			result = self.player.set_state(state)
+			debug('state change result =', result)
+			if result != gst.STATE_CHANGE_SUCCESS:
+				self.state_change_done.wait(TIMEOUT)
+				if self.last_error:
+					raise self.last_error
+			
 	def start(self):
 		self.updatethread.start()
 		try:
@@ -130,6 +160,7 @@ class Player(object):
 		return func(message.parse_error(), *args, **kwargs)
 		
 	def connect(self, which, func, *args, **kwargs):
+		debug('connecting', which, func, args, kwargs)
 		if which == 'state-changed':
 			self.bus.connect('message::state-changed', self.on_state_changed, func, *args)
 		elif which == 'update':
@@ -147,7 +178,7 @@ class Player(object):
 	
 	def isplaying(self):
 		return self.player.get_state()[1] == gst.STATE_PLAYING
-			 
+			
 	def play_pause(self):
 		if self.isplaying():
 			self.pause()
@@ -156,16 +187,16 @@ class Player(object):
 		
 	def play(self):
 		debug('play')
-		self.player.set_state('playing')
+		self.set_state('playing')
 		self.refresh_xid()
 		
 	def pause(self):
 		debug('pause')
-		self.player.set_state('paused')
+		self.set_state('paused')
 		
 	def stop(self):
 		debug('stop')
-		self.player.set_state('null')
+		self.set_state('null')
 		
 	def get_volume(self):
 		return self.player.get_property('volume')
@@ -263,7 +294,7 @@ class tag_reader(object):
 				elif msg.type & gst.MESSAGE_EOS:
 					break
 				elif msg.type & gst.MESSAGE_ERROR:
-					raise GstError(*msg.parse_error())
+					raise Error(*msg.parse_error())
 				elif not normalize and msg.type & gst.MESSAGE_ASYNC_DONE:
 					break
 				elif msg.type & gst.MESSAGE_TAG:

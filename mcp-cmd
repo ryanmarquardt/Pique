@@ -2,7 +2,7 @@
 
 from mcp import *
 
-serv = client('localhost')
+serv = Client('localhost')
 serv.connect()
 result = serv.ask(*sys.argv[1:])
 print result

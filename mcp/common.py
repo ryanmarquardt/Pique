@@ -2,9 +2,11 @@ import sys
 import threading
 
 DEBUG = True
+debug_out_lock = threading.Lock()
 def debug(*args):
 	if DEBUG:
-		print >>sys.stderr, threading.currentThread().name + ':', ' '.join(map(str,args))
+		with debug_out_lock:
+			print >>sys.stderr, threading.currentThread().name + ':', ' '.join(map(str,args))
 
 VERBOSE = True
 def verbose(*args):
@@ -14,6 +16,8 @@ def verbose(*args):
 TIME_FORMAT='hms'
 
 SECOND = 1e9
+NETPORT = 8145
+BUFSIZE = 1<<12 #4096
 
 class Time(long):
 	@classmethod

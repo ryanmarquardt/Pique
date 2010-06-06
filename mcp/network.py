@@ -1,43 +1,64 @@
 from common import *
+from player import Error as PlayerError
 import thread
 
+import collections
 import socket
 import traceback
 
-BUFSIZE = 1e12 #4096
+NetFormat = str
+
+def recv_delimited(sock, delimiter):
+	buffer = sock.recv(BUFSIZE)
+	buff2 = ''
+	while buffer:
+		buff2 += buffer
+		while delimiter in buff2:
+			cmd, _, buff2 = buff2.partition(delimiter)
+			cmd = cmd.split('\n')
+			yield cmd[0], cmd[1:]
+		try:
+			buffer = sock.recv(BUFSIZE)
+		except socket.error:
+			buffer = ''
 
 class ConnectionThread(thread.BgThread):
 	def main(self, commandmap, sock, address):
+		self.sock = sock
 		self.name = "Client %s:%i" % address
 		debug('connected')
-		buffer = collections.deque()
-		while sock or buffer:
-			buffer.append(sock.recv(BUFSIZE))
-			success = ''
-			line = ''
-			while not success:
-				more, success, leftover = buffer.pop().partition('\n')
-				line += more
-			if leftover:
-				buffer.appendleft(leftover)
-			debug('called', line.strip())
-			if line == 'close':
+		for cmd, args in recv_delimited(sock, '\n\n'):
+			debug('called', cmd, args)
+			if cmd == 'close':
 				break
 			try:
-				commandmap[line.strip()]()
+				func = commandmap[cmd]
+			except KeyError:
+				self.respond('No such command')
+				continue
+			try:
+				result = func(*args)
+			except PlayerError, e:
+				debug(e)
+				self.respond(e)
 			except:
 				tb = traceback.format_exc()
-				while tb:
-					tb = tb[s.send(tb):]
 				debug('Error:', tb)
-				break
+				self.respond('Unknown Error', tb)
+				continue
 			else:
 				debug('OK')
-				s.write('OK\n')
-				s.flush()
-		s.close()
+				self.respond(None, result)
 		sock.close()
 		debug('disconnected')
+		
+	def respond(self, err=None, payload=None):
+		if payload is not None:
+			self.sock.send(NetFormat(payload) + '\n')
+		if err is None:
+			self.sock.send('OK\n\n')
+		else:
+			self.sock.send('ERR: %s\n\n' % err)
 		
 class NetThread(thread.BgThread):
 	name = "NetworkThread"
