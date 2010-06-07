@@ -3,8 +3,9 @@ from common import *
 
 class Playlist(object):
 	def __init__(self, uris=[], repeat=False, random=False):
-		self.repeat = False
-		self.random = False
+		self.repeat = repeat
+		self.random = random
+		self.version = 0
 		self.load(uris)
 		
 	def load(self, uris):
@@ -12,7 +13,7 @@ class Playlist(object):
 		self.entries = tuple(uris)
 		
 	def add(self, uri):
-		self.entries = self.entries + (uri,)
+		self.load(self.entries + (uri,))
 		
 	def _extend(self):
 		if self.random:
@@ -58,6 +59,7 @@ class Playlist(object):
 		self.history = collections.deque()
 		self.history.append(None)
 		self.entries = ()
+		self.version += 1
 		
 	def set_repeat(self, yes=True):
 		self.repeat = yes
