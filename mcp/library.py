@@ -19,7 +19,7 @@ TABLE_VERSION = Versions[0]
 
 def Columns(version=TABLE_VERSION, names_only=False):
 	conf = ConfigParser.SafeConfigParser()
-	conf.read('/home/ryan/Projects/mcp/mcp/table-def.conf')
+	conf.read('/home/ryan/Projects/Pique/mcp/table-def.conf')
 	if names_only:
 		return conf.options(version)
 	else:
