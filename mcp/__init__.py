@@ -1,13 +1,13 @@
 VERSION = '0.01'
 
+import collections
 import ConfigParser
 import os
 import signal
 import sys
 
 from common import *
-from library import library as Library
-from library import uri
+from library import Library, uri
 from network import NetThread
 from console import ConsoleThread
 from player import Player
@@ -37,12 +37,9 @@ class Main(object):
 			'previous': self.player.previous,
 			'controls': self.gui.toggle_controls,
 			'seek': lambda pos:self.player.seek(pos*SECOND, False),
-			'forward-near': lambda:self.player.seek(15*SECOND, False),
-			'forward-far': lambda:self.player.seek(60*SECOND, False),
+			'jump': lambda pos:self.player.seek(pos*SECOND, True),
 			'beginning': lambda:self.player.seek(0, True),
 			'end': lambda:self.player.seek(self.player.get_duration(), True),
-			'back-near': lambda:self.player.seek(-15*SECOND, False),
-			'back-far': lambda:self.player.seek(-60*SECOND, False),
 			'volume-up': lambda:self.player.set_volume(.05, False),
 			'volume-down': lambda:self.player.set_volume(-.05, False),
 			'mute': lambda:self.player.set_volume(0, True),
@@ -59,6 +56,8 @@ class Main(object):
 		
 		self.keymap = KeyMap(conf, self.commandmap)
 		self.server = NetThread(conf, self.commandmap)
+		self.console = ConsoleThread()
+		self.console.set_keymap(self.keymap)
 		
 		self.gui.connect('play-pause', self.player.play_pause)
 		self.gui.connect('next', self.player.next)
@@ -74,20 +73,15 @@ class Main(object):
 		self.player.connect('state-changed', self.gui.update_state)
 		self.player.connect('update', self.gui.update_time)
 		
-		self.console = ConsoleThread()
-		self.console.set_keymap(self.keymap)
-		
 	def start(self):
-		self.server.start()
-		self.console.start()
-		self.player.start()
-		self.gui.start()
+		self.threads = collections.deque()
+		for thread in (self.server, self.console, self.player, self.gui):
+			self.threads.append(thread)
+			thread.start()
 		
 	def quit(self):
-		self.player.quit()
-		self.gui.quit()
-		self.console.quit()
-		self.server.quit()
+		while self.threads:
+			self.threads.pop().quit()
 		
 	def on_eos(self):
 		debug('eos')

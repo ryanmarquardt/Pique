@@ -48,7 +48,7 @@ from common import *
 def uri(path):
 	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://' + path
 
-class library(collections.MutableMapping):
+class Library(collections.MutableMapping):
 	def __init__(self, path):
 		self.__db = {}
 		self.path = path
@@ -182,4 +182,4 @@ def upgrade(src=Versions[-1], dst=Versions[0], path=DEFAULT_PATH):
 		B.close()
 		db.commit()
 
-__all__ = ['uri', 'library', 'tag_reader', 'gsub', 'DEFAULT_PATH', 'upgrade']
+__all__ = ['uri', 'Library', 'tag_reader', 'gsub', 'DEFAULT_PATH', 'upgrade']

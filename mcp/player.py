@@ -51,6 +51,11 @@ class PlayThread(BgThread):
 STATE_PLAYING = 'playing'
 STATE_PAUSED = 'paused'
 STATE_STOPPED = 'stopped'
+StateMap = {
+	gst.STATE_PLAYING: STATE_PLAYING,
+	gst.STATE_PAUSED: STATE_PAUSED,
+	gst.STATE_NULL: STATE_STOPPED
+}
 
 class Player(object):
 	def __init__(self, config, lib, pl):
@@ -142,12 +147,7 @@ class Player(object):
 			
 	def on_state_changed(self, bus, message, callback, *args):
 		_, new, _ = message.parse_state_changed()
-		if new == gst.STATE_PLAYING:
-			callback(STATE_PLAYING, *args)
-		elif new == gst.STATE_NULL:
-			callback(STATE_STOPPED, *args)
-		elif new == gst.STATE_PAUSED:
-			callback(STATE_PAUSED, *args)
+		callback(StateMap[new], *args)
 			
 	def on_update(self, bus, message, cb):
 		func, args, kwargs = cb
