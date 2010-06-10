@@ -45,13 +45,13 @@ def select(c, which, **where):
 
 from common import *
 
-def uri(path):
-	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://' + path
-
 class Library(collections.MutableMapping):
 	def __init__(self, path):
 		self.__db = {}
 		self.path = path
+		self.commands = {
+			'library-search':	self.search,
+		}
 		
 	def __del__(self):
 		for db in self.__db.values():
@@ -141,6 +141,9 @@ class Library(collections.MutableMapping):
 		c.execute('select * from %s where ' + ','.join(['%s=?' for k in kwargs.keys()]), kwargs.values())
 		for i in c:
 			yield Row._make(i)
+			
+	def search(self, *args):
+		pass
 			
 	def select_uris(self, **kwargs):
 		c = self.db.cursor()

@@ -7,6 +7,14 @@ class Playlist(object):
 		self.random = random
 		self.version = 0
 		self.load(uris)
+		self.commands = {
+			'playlist-add':		self.add,
+			'playlist-load':	self.load,
+			'playlist-clear':	self.clear,
+			'playlist-repeat':	self.set_repeat,
+			'playlist-random':	self.set_random,
+			'playlist-list':	lambda:'\n'.join(self.entries),
+		}
 		
 	def load(self, uris):
 		self.clear()

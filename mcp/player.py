@@ -88,6 +88,22 @@ class Player(object):
 		self.state_change_done = threading.Event()
 		self.updatethread = PlayThread(self.emit_update, 0.1)
 		
+		self.commands = {
+			'next':			self.next,
+			'play-pause':	self.play_pause,
+			'play':			self.play,
+			'pause':		self.pause,
+			'stop':			self.stop,
+			'previous':		self.previous,
+			'seek':			lambda pos:self.seek(pos*SECOND, False),
+			'jump':			lambda pos:self.seek(pos*SECOND, True),
+			'beginning':	lambda:self.seek(0, True),
+			'end':			lambda:self.seek(self.player.get_duration(), True),
+			'volume-up':	lambda:self.set_volume(.05, False),
+			'volume-down':	lambda:self.set_volume(-.05, False),
+			'mute':			lambda:self.set_volume(0, True),
+		}
+
 	def on_private_error(self, error):
 		self.last_error = Error(*error)
 		self.state_change_done.set()

@@ -1,6 +1,6 @@
 from common import *
 
-class KeyMap(object):
+class KeyMap(dict):
 	def __init__(self, config, commandmap):
 		self.keys = dict((str(k).lower(),v) for k,v in config.items('KeyMap'))
 		self.commandmap = commandmap

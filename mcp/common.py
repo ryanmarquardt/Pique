@@ -42,3 +42,5 @@ class Time(long):
 		elif f == 's.':
 			return '%f' % (self / float(SECOND))
 			
+def uri(path):
+	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://' + path

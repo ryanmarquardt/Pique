@@ -14,15 +14,15 @@ description=
 run_cmd=./pique
 
 [files]
-current_page=17
+current_page=1
 FILE_NAME_0=582;Python;0;16;1;1;0;/home/ryan/Projects/Pique/pique;0
-FILE_NAME_1=616;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/__init__.py;0
+FILE_NAME_1=1778;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/__init__.py;0
 FILE_NAME_2=448;Conf;0;16;1;1;0;/home/ryan/Projects/Pique/mcp.conf;0
 FILE_NAME_3=311;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/common.py;0
-FILE_NAME_4=3980;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/player.py;0
-FILE_NAME_5=419;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/library.py;0
-FILE_NAME_6=1135;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/gui.py;0
-FILE_NAME_7=244;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/console.py;0
+FILE_NAME_4=4048;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/player.py;0
+FILE_NAME_5=20;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/library.py;0
+FILE_NAME_6=2570;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/gui.py;0
+FILE_NAME_7=247;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/console.py;0
 FILE_NAME_8=429;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/keymap.py;0
 FILE_NAME_9=379;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/network.py;0
 FILE_NAME_10=1801;Python;0;16;1;1;0;/home/ryan/Projects/Pique/mcp/rawtty.py;0

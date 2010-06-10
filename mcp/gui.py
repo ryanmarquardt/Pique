@@ -146,6 +146,14 @@ class GUI(gtk.Window):
 		gtk.Window.add(self, self.videobox)
 		gtk.Window.show_all(self)
 		
+		self.commands = {
+			'fullscreen':	self.toggle_fullscreen,
+			'menu':			self.toggle_menu,
+			'controls':		self.toggle_controls,
+			'show-menu':	self.show_menu,
+			'hide-menu':	self.hide_menu,
+		}
+		
 	def update_time(self, pos, dur):
 		self.videobox.update_time(pos, dur)
 		
