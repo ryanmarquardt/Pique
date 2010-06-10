@@ -240,7 +240,7 @@ class Player(object):
 		self.stop()
 		if pos < 3 * gst.SECOND:
 			try:
-				self.load(self.playlist.previous())
+				self.playlist.previous()
 			except StopIteration:
 				return
 		self.play()
@@ -249,7 +249,7 @@ class Player(object):
 		debug('next')
 		self.stop()
 		try:
-			self.load(self.playlist.next())
+			self.playlist.next()
 		except StopIteration:
 			return
 		self.play()

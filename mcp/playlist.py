@@ -15,10 +15,17 @@ class Playlist(object):
 			'playlist-random':	self.set_random,
 			'playlist-list':	lambda:'\n'.join(self.entries),
 		}
+		self.callbacks = collections.defaultdict(list)
+		
+	def connect(self, which, func, *args, **kwargs):
+		self.callbacks[which].append((func,args,kwargs))
 		
 	def load(self, uris):
 		self.clear()
 		self.entries = tuple(uris)
+		self._extend()
+		if self.entries:
+			self.next()
 		
 	def add(self, uri):
 		self.load(self.entries + (uri,))
@@ -30,25 +37,23 @@ class Playlist(object):
 			self.history.extend(entries)
 		else:
 			self.history.extend(self.entries)
-		self.history.rotate(len(self.entries))
+		#self.history.rotate(len(self.entries))
 		
 	def next(self):
 		debug(self.history)
 		self.history.rotate(-1)
-		if self.history[0] is not None:
-			return self.history[0]
-		else:
+		if self.history[0] is None:
 			#End of playlist
 			if not self.repeat and len(self.history) > 1:
 				raise StopIteration
 			else:
 				self._extend()
-			debug(self.history)
 			self.history.rotate(-1)
-			if self.history[0]:
-				return self.history[0]
-			else:
+			if not self.history[0]:
 				raise StopIteration
+		for func,args,kwargs in self.callbacks['new-uri-available']:
+			func(self.history[0], *args,**kwargs)
+		return self.history[0]
 		
 	def __len__(self):
 		return len(self.history) - 1
@@ -58,10 +63,12 @@ class Playlist(object):
 			#Still at the beginning
 			raise StopIteration
 		self.history.rotate(1)
-		uri = self.history[0]
-		if uri is None:
+		if self.history[0] is None:
 			#Backed up as far as history goes
 			raise StopIteration
+		for func,args,kwargs in self.callbacks['new-uri-available']:
+			func(self.history[0], *args,**kwargs)
+		return self.history[0]
 		
 	def clear(self):
 		self.history = collections.deque()

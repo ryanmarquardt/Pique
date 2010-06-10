@@ -36,6 +36,7 @@ class Main(object):
 		self.commandmap.update(self.playlist.commands)
 		
 		self.player = Player(conf, self.library, self.playlist)
+		self.playlist.connect('new-uri-available', self.player.load)
 		self.gui = GUI()
 		
 		self.player.window = self.gui.videobox.movie_window
