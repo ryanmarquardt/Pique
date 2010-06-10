@@ -31,6 +31,10 @@ class ConnectionThread(thread.BgThread):
 			debug('called', cmd, args)
 			if cmd == 'close':
 				break
+			elif cmd == 'quit':
+				self.respond(None)
+				commandmap[cmd](*args) #quit()
+				break
 			try:
 				func = commandmap[cmd]
 			except KeyError:

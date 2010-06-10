@@ -163,7 +163,8 @@ class Player(object):
 			
 	def on_state_changed(self, bus, message, callback, *args):
 		_, new, _ = message.parse_state_changed()
-		callback(StateMap[new], *args)
+		if new in StateMap:
+			callback(StateMap[new], *args)
 			
 	def on_update(self, bus, message, cb):
 		func, args, kwargs = cb
