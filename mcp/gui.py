@@ -127,7 +127,7 @@ def connect_accel(acg, name, func):
 	acg.connect_group(k, m, gtk.ACCEL_VISIBLE, lambda g,w,k,m:func())
 	
 class GUI(gtk.Window):
-	dependencies = ('mcp.player.Player', 'mcp.keymap.KeyMap')
+	dependencies = ('mcp.player.Player', 'mcp.keymap.KeyMap', 'commandmap')
 	def __init__(self, confitems):
 		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)
 		
@@ -144,6 +144,7 @@ class GUI(gtk.Window):
 		gtk.Window.set_title(self, 'Video-Player')
 		gtk.Window.set_default_size(self, 500, 400)
 		gtk.Window.connect(self, 'window-state-event', self.on_window_state_event)
+		gtk.Window.connect(self, 'destroy', self.destroy)
 		gtk.Window.add(self, self.videobox)
 		gtk.Window.show_all(self)
 		
@@ -167,6 +168,8 @@ class GUI(gtk.Window):
 			#self.connect('volume', dep.set_volume)
 		elif name == 'mcp.keymap.KeyMap':
 			self.set_keymap(dep)
+		elif name == 'commandmap':
+			self.quit = dep['quit']
 		else:
 			raise Exception
 		
@@ -179,14 +182,14 @@ class GUI(gtk.Window):
 	def start(self):
 		gtk.gdk.threads_init()
 		
-	def quit(self):
-		gtk.main_quit()
+	def destroy(self, window):
+		self.quit()
 		
 	def connect(self, which, func, *args, **kwargs):
 		if which in VideoBox.signals:
 			self.videobox.connect(which, func, *args, **kwargs)
-		elif which == 'destroy':
-			gtk.Window.connect(self, 'destroy', self.videobox.on_signal, (func,args,kwargs))
+		#elif which == 'destroy':
+			#gtk.Window.connect(self, 'destroy', self.videobox.on_signal, (func,args,kwargs))
 		else:
 			gtk.Window.connect(self, which, *args)
 		

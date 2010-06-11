@@ -131,10 +131,7 @@ class Player(object):
 			
 	def start(self):
 		self.updatethread.start()
-		try:
-			self.next()
-		except StopIteration:
-			pass
+		self.next()
 		
 	def quit(self):
 		self.stop()

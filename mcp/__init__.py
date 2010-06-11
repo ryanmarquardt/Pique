@@ -62,7 +62,11 @@ class PluginManager(collections.defaultdict):
 				plugin.start()
 		
 	def quit(self):
-		while self.threads:
+		if gtk.main_level():
+			gtk.main_quit()
+		
+	def cleanup(self):
+		while self.order:
 			p = self.order.pop()
 			if hasattr(p, 'quit'):
 				p.quit()
@@ -77,9 +81,10 @@ class Main(object):
 		self.plugins['mcp.player.Player'].connect('eos', self.on_eos)
 		self.plugins['mcp.player.Player'].connect('error', self.on_error)
 		
+	def start(self):
 		self.plugins.start()
 		gtk.main()
-		self.plugins.quit()
+		self.plugins.cleanup()
 	
 	def on_eos(self):
 		debug('eos')
