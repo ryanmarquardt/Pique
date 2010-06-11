@@ -1,9 +1,13 @@
 from common import *
 
 class KeyMap(dict):
-	def __init__(self, config, commandmap):
-		self.keys = dict((str(k).lower(),v) for k,v in config.items('KeyMap'))
-		self.commandmap = commandmap
+	dependencies = ('commandmap',)
+	def __init__(self, items):
+		self.keys = dict((str(k).lower(),v) for k,v in items)
+	
+	def on_dep_available(self, name, item):
+		if name == 'commandmap':
+			self.commandmap = item
 		
 	def add(self, key, cmd):
 		self.keys[key] = cmd

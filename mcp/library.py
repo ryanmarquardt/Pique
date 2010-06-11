@@ -46,13 +46,14 @@ def select(c, which, **where):
 from common import *
 
 class Library(collections.MutableMapping):
-	def __init__(self, path):
+	dependencies = ()
+	def __init__(self, items):
 		self.__db = {}
-		self.path = path
+		self.path = os.path.expanduser(dict(items)['path'])
 		self.commands = {
 			'library-search':	self.search,
 		}
-		
+	
 	def __del__(self):
 		for db in self.__db.values():
 			db.commit()

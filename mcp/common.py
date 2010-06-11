@@ -44,3 +44,17 @@ class Time(long):
 			
 def uri(path):
 	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://' + path
+
+class Plugin(object):
+	def __init__(self, path):
+		self.name = path.rsplit('.')[-1]
+		
+	def on_dep_available(self, path, obj):
+		pass
+		
+	def start(self):
+		pass
+		
+	def quit(self):
+		pass
+		

@@ -127,7 +127,8 @@ def connect_accel(acg, name, func):
 	acg.connect_group(k, m, gtk.ACCEL_VISIBLE, lambda g,w,k,m:func())
 	
 class GUI(gtk.Window):
-	def __init__(self):
+	dependencies = ('mcp.player.Player', 'mcp.keymap.KeyMap')
+	def __init__(self, confitems):
 		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)
 		
 		accelgroup = gtk.AccelGroup()
@@ -154,6 +155,21 @@ class GUI(gtk.Window):
 			'hide-menu':	self.hide_menu,
 		}
 		
+	def on_dep_available(self, name, dep):
+		if name == 'mcp.player.Player':
+			dep.window = self.videobox.movie_window
+			dep.connect('state-changed', self.update_state)
+			dep.connect('update', self.update_time)
+			self.connect('play-pause', dep.play_pause)
+			self.connect('next', dep.next)
+			self.connect('previous', dep.previous)
+			self.connect('position', dep.seek)
+			#self.connect('volume', dep.set_volume)
+		elif name == 'mcp.keymap.KeyMap':
+			self.set_keymap(dep)
+		else:
+			raise Exception
+		
 	def update_time(self, pos, dur):
 		self.videobox.update_time(pos, dur)
 		
@@ -162,7 +178,6 @@ class GUI(gtk.Window):
 		
 	def start(self):
 		gtk.gdk.threads_init()
-		gtk.main()
 		
 	def quit(self):
 		gtk.main_quit()

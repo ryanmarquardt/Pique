@@ -58,23 +58,22 @@ StateMap = {
 }
 
 class Player(object):
-	def __init__(self, config, lib, pl):
-		self.lib = lib
+	dependencies = ('mcp.library.Library', 'mcp.playlist.Playlist')
+	def __init__(self, confitems):
+		config = dict(confitems)
 		self.state_change_lock = threading.Lock()
 		
 		self.taginject = Element('taginject')
-		audio_sink = Element(config.get('Gstreamer', 'audio-plugin'))
+		audio_sink = Element(config.get('audio-plugin','gconfaudiosink'))
 		self.audio_bin = Bin(self.taginject, Element('rgvolume'), audio_sink)
 		
-		self.video_sink = Element(config.get('Gstreamer', 'video-plugin'))
+		self.video_sink = Element(config.get('video-plugin','gconfvideosink'))
 		self.video_sink.set_property('force-aspect-ratio', True)
 		
 		self.player = Element('playbin')
 		self.player.set_property('audio-sink', self.audio_bin)
 		self.player.set_property('video-sink', self.video_sink)
-		self.player.set_property('vis-plugin', Element(config.get('Gstreamer','vis-plugin')))
-		
-		self.playlist = pl
+		self.player.set_property('vis-plugin', Element(config.get('vis-plugin','fakesink')))
 		
 		self._window = None
 		self.bus.add_signal_watch()
@@ -104,6 +103,14 @@ class Player(object):
 			'mute':			lambda:self.set_volume(0, True),
 		}
 
+	def on_dep_available(self, name, dep):
+		if name == 'mcp.library.Library':
+			self.lib = dep
+		elif name == 'mcp.playlist.Playlist':
+			self.playlist = dep
+		else:
+			raise Exception
+			
 	def on_private_error(self, error):
 		self.last_error = Error(*error)
 		self.state_change_done.set()

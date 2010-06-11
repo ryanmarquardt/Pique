@@ -6,76 +6,85 @@ import os
 import signal
 import sys
 
+import gtk
+
 from common import *
-from library import Library
-from network import NetThread
-from console import ConsoleThread
-from player import Player
-from playlist import Playlist
-from gui import GUI
-from keymap import KeyMap
-from client import Client
+#from library import Library
+#from network import NetThread
+#from console import ConsoleThread
+#from player import Player
+#from playlist import Playlist
+#from gui import GUI
+#from keymap import KeyMap
+#from client import Client
+
+def importfrom(path):
+	mod, _, cls = path.rpartition('.')
+	__import__(mod)
+	return getattr(sys.modules[mod], cls)
+	
+class PluginError(Exception): pass
+
+class PluginManager(collections.defaultdict):
+	def __init__(self, conf):
+		self.conf = conf
+		self['commandmap'] = {'quit': self.quit}
+		self.order = collections.deque()
+		for _, path in conf.items('Plugins'):
+			self[path]
+		
+	def __missing__(self, path):
+		debug('Load plugin', path)
+		#load plugin
+		plugin = importfrom(path)
+		try:
+			items = self.conf.items(plugin.__name__)
+		except ConfigParser.NoSectionError:
+			items = ()
+		p = plugin(items)
+		if hasattr(p, 'commands'):
+			for k in p.commands:
+				if k in self['commandmap']:
+					raise PluginError('Name conflict: %s is attempting to overwrite command %s' % (plugin.__name__, k))
+				self['commandmap'][k] = p.commands[k]
+		if hasattr(p, 'dependencies'):
+			for d in p.dependencies:
+				p.on_dep_available(d, self[d]) 
+				#Automatically loads dependencies which haven't been loaded yet
+		#Store dependencies in reverse order
+		self.order.append(p)
+		self[path] = p
+		return p
+		
+	def start(self):
+		for plugin in self.order:
+			if hasattr(plugin, 'start'):
+				plugin.start()
+		
+	def quit(self):
+		while self.threads:
+			p = self.order.pop()
+			if hasattr(p, 'quit'):
+				p.quit()
 
 class Main(object):
 	def __init__(self):
 		conf = ConfigParser.SafeConfigParser()
 		conf.read(['./mcp.conf',os.path.expanduser('~/.mcp.conf')])
-		self.commandmap = {}
 		
-		self.library = Library(os.path.expanduser(conf.get('Library', 'path')))
-		self.commandmap.update(self.library.commands)
+		self.plugins = PluginManager(conf)
 		
-		self.keymap = KeyMap(conf, self.commandmap)
+		self.plugins['mcp.player.Player'].connect('eos', self.on_eos)
+		self.plugins['mcp.player.Player'].connect('error', self.on_error)
 		
-		self.server = NetThread(conf, self.commandmap)
-		
-		self.console = ConsoleThread()
-		self.console.set_keymap(self.keymap)
-		
-		self.playlist = Playlist()
-		self.commandmap.update(self.playlist.commands)
-		
-		self.player = Player(conf, self.library, self.playlist)
-		self.playlist.connect('new-uri-available', self.player.load)
-		self.gui = GUI()
-		
-		self.player.window = self.gui.videobox.movie_window
-		self.player.connect('eos', self.on_eos)
-		self.player.connect('error', self.on_error)
-		self.player.connect('state-changed', self.gui.update_state)
-		self.player.connect('update', self.gui.update_time)
-		self.commandmap.update(self.player.commands)
-		
-		self.gui.connect('play-pause', self.player.play_pause)
-		self.gui.connect('next', self.player.next)
-		self.gui.connect('previous', self.player.previous)
-		self.gui.connect('position', self.player.seek)
-		#self.gui.connect('volume', self.player.set_volume)
-		self.gui.connect('destroy', self.quit)
-		self.gui.set_keymap(self.keymap)
-		self.commandmap.update(self.gui.commands)
-		
-		self.commandmap['quit'] = self.quit
-		
-	def start(self):
-		self.threads = collections.deque()
-		for thread in (self.server, self.console, self.player, self.gui):
-			self.threads.append(thread)
-			thread.start()
-		
-	def quit(self):
-		while self.threads:
-			self.threads.pop().quit()
-		
+		self.plugins.start()
+		gtk.main()
+		self.plugins.quit()
+	
 	def on_eos(self):
 		debug('eos')
-		self.player.next()
+		self.plugins['commandmap']['next']()
 		
 	def on_error(self, error):
 		debug('Error:', *error)
-		self.player.stop()
-		
-	def on_destroy(self, *args):
-		self.quit()
-		
-
+		self.plugins['commandmap']['stop']()
