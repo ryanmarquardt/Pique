@@ -101,6 +101,7 @@ class Player(object):
 			'volume-up':	lambda:self.set_volume(.05, False),
 			'volume-down':	lambda:self.set_volume(-.05, False),
 			'mute':			lambda:self.set_volume(0, True),
+			'status':		self.status,
 		}
 
 	def on_dep_available(self, name, dep):
@@ -108,8 +109,13 @@ class Player(object):
 			self.lib = dep
 		elif name == 'mcp.playlist.Playlist':
 			self.playlist = dep
+			self.playlist.connect('changed', self.on_playlist_changed)
 		else:
 			raise Exception
+			
+	def on_playlist_changed(self):
+		if not self.isplaying():
+			self.next()
 			
 	def on_private_error(self, error):
 		self.last_error = Error(*error)
@@ -196,6 +202,9 @@ class Player(object):
 			new = max(0, new + self.get_position(percent=percent))
 		debug('seek', new)
 		self.player.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, new)
+		
+	def status(self):
+		return StateMap[self.player.get_state()[0]]
 	
 	def isplaying(self):
 		return self.player.get_state()[1] == gst.STATE_PLAYING

@@ -5,8 +5,10 @@ class Playlist(object):
 	def __init__(self, uris=[], repeat=False, random=False):
 		self.repeat = repeat
 		self.random = random
+		self.history = collections.deque()
+		self.history.append(None)
+		self.entries = ()
 		self.version = 0
-		self.load(uris)
 		self.commands = {
 			'playlist-add':		self.add,
 			'playlist-load':	self.load,
@@ -20,12 +22,15 @@ class Playlist(object):
 	def connect(self, which, func, *args, **kwargs):
 		self.callbacks[which].append((func,args,kwargs))
 		
+	def emit(self, signal, *args):
+		for f,a,k in self.callbacks[signal]:
+			f(*(args+a), **k)
+		
 	def load(self, uris):
 		self.clear()
 		self.entries = tuple(uris)
 		self._extend()
-		if self.entries:
-			self.next()
+		self.emit('changed')
 		
 	def add(self, uri):
 		self.load(self.entries + (uri,))
