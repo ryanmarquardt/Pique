@@ -1,4 +1,4 @@
-from thread import start_new_thread
+import thread
 
 from common import *
 import sys
@@ -70,12 +70,17 @@ class VideoBox(gtk.VBox):
 		gtk.VBox.pack_start(self, self.buttons, False, False)
 		
 	def set_keymap(self, keymap):
-		debug('set keymap')
+		debug('GUI Set Keymap')
 		self.movie_window.add_events(gtk.gdk.KEY_PRESS_MASK)
 		self.movie_window.set_flags(gtk.CAN_FOCUS)
-		self.movie_window.connect('key-press-event',
-		  #lambda w,e:keymap.interpret(gtk.accelerator_name(e.keyval, e.state)))
-		  lambda w,e:start_new_thread(keymap.interpret, (gtk.accelerator_name(e.keyval, e.state),)))
+		self.movie_window.grab_focus()
+		self.movie_window.connect('key-press-event', self.on_keypress)
+		self.keymap = keymap
+		
+	def on_keypress(self, window, event):
+		modifiers = gtk.gdk.SHIFT_MASK | gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
+		accel = gtk.accelerator_name(event.keyval, event.state & modifiers)
+		thread.start_new_thread(self.keymap.interpret, (accel,))
 		
 	signals = 'play-pause', 'previous', 'next', 'position', 'xid-request', 'clicked'
 	def connect(self, which, callback, *args, **kwargs):
@@ -167,10 +172,10 @@ class GUI(gtk.Window):
 		player.window = self.videobox.movie_window
 		player.connect('state-changed', self.update_state)
 		player.connect('update', self.update_time)
-		self.connect('play-pause', start_new_thread, player.play_pause, ())
-		self.connect('next', start_new_thread, player.next, ())
-		self.connect('previous', start_new_thread, player.previous, ())
-		self.connect('position', start_new_thread, player.seek, ())
+		self.connect('play-pause', thread.start_new_thread, player.play_pause, ())
+		self.connect('next', thread.start_new_thread, player.next, ())
+		self.connect('previous', thread.start_new_thread, player.previous, ())
+		self.connect('position', thread.start_new_thread, player.seek, ())
 		self.stop = player.stop
 		#self.connect('volume', player.set_volume)
 		
