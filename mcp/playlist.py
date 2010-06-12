@@ -1,8 +1,9 @@
 import collections
 from common import *
 
-class Playlist(object):
+class Playlist(PObject):
 	def __init__(self, uris=[], repeat=False, random=False):
+		PObject.__init__(self)
 		self.repeat = repeat
 		self.random = random
 		self.history = collections.deque()
@@ -17,15 +18,6 @@ class Playlist(object):
 			'playlist-random':	self.set_random,
 			'playlist-list':	lambda:'\n'.join(self.entries),
 		}
-		self.callbacks = collections.defaultdict(list)
-		
-	def connect(self, which, func, *args, **kwargs):
-		self.callbacks[which].append((func,args,kwargs))
-		
-	def emit(self, signal, *args):
-		debug('Playlist.emit', signal, *args)
-		for f,a,k in self.callbacks[signal]:
-			f(*(args+a), **k)
 		
 	def load(self, uris):
 		self.clear()

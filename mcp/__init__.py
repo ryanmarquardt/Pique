@@ -9,14 +9,6 @@ import sys
 import gtk
 
 from common import *
-#from library import Library
-#from network import NetThread
-#from console import ConsoleThread
-#from player import Player
-#from playlist import Playlist
-#from gui import GUI
-#from keymap import KeyMap
-#from client import Client
 
 def importfrom(path):
 	mod, _, cls = path.rpartition('.')
@@ -47,9 +39,9 @@ class PluginManager(collections.defaultdict):
 				if k in self['commandmap']:
 					raise PluginError('Name conflict: %s is attempting to overwrite command %s' % (plugin.__name__, k))
 				self['commandmap'][k] = p.commands[k]
-		if hasattr(p, 'dependencies'):
-			for d in p.dependencies:
-				p.on_dep_available(d, self[d]) 
+		if hasattr(p, 'dependencies') and hasattr(p.dependencies, 'items'):
+			for name, callback in p.dependencies.items():
+				callback(self[name])
 				#Automatically loads dependencies which haven't been loaded yet
 		#Store dependencies in reverse order
 		self.order.append(p)

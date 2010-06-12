@@ -1,3 +1,5 @@
+from thread import start_new_thread
+
 from common import *
 import sys
 args, sys.argv = sys.argv, []
@@ -72,7 +74,8 @@ class VideoBox(gtk.VBox):
 		self.movie_window.add_events(gtk.gdk.KEY_PRESS_MASK)
 		self.movie_window.set_flags(gtk.CAN_FOCUS)
 		self.movie_window.connect('key-press-event',
-		  lambda w,e:keymap.interpret(gtk.accelerator_name(e.keyval, e.state)))
+		  #lambda w,e:keymap.interpret(gtk.accelerator_name(e.keyval, e.state)))
+		  lambda w,e:start_new_thread(keymap.interpret, (gtk.accelerator_name(e.keyval, e.state),)))
 		
 	signals = 'play-pause', 'previous', 'next', 'position', 'xid-request', 'clicked'
 	def connect(self, which, callback, *args, **kwargs):
@@ -127,8 +130,12 @@ def connect_accel(acg, name, func):
 	acg.connect_group(k, m, gtk.ACCEL_VISIBLE, lambda g,w,k,m:func())
 	
 class GUI(gtk.Window):
-	dependencies = ('mcp.player.Player', 'mcp.keymap.KeyMap', 'commandmap')
 	def __init__(self, confitems):
+		self.dependencies = {
+			'mcp.player.Player': self.on_set_player,
+			'mcp.keymap.KeyMap': self.on_set_keymap,
+			'commandmap': self.on_set_commandmap,
+		}
 		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)
 		
 		accelgroup = gtk.AccelGroup()
@@ -155,23 +162,22 @@ class GUI(gtk.Window):
 			'show-menu':	self.show_menu,
 			'hide-menu':	self.hide_menu,
 		}
+	
+	def on_set_player(self, player):
+		player.window = self.videobox.movie_window
+		player.connect('state-changed', self.update_state)
+		player.connect('update', self.update_time)
+		self.connect('play-pause', start_new_thread, player.play_pause, ())
+		self.connect('next', start_new_thread, player.next, ())
+		self.connect('previous', start_new_thread, player.previous, ())
+		self.connect('position', start_new_thread, player.seek, ())
+		#self.connect('volume', player.set_volume)
 		
-	def on_dep_available(self, name, dep):
-		if name == 'mcp.player.Player':
-			dep.window = self.videobox.movie_window
-			dep.connect('state-changed', self.update_state)
-			dep.connect('update', self.update_time)
-			self.connect('play-pause', dep.play_pause)
-			self.connect('next', dep.next)
-			self.connect('previous', dep.previous)
-			self.connect('position', dep.seek)
-			#self.connect('volume', dep.set_volume)
-		elif name == 'mcp.keymap.KeyMap':
-			self.set_keymap(dep)
-		elif name == 'commandmap':
-			self.quit = dep['quit']
-		else:
-			raise Exception
+	def on_set_keymap(self, keymap):
+		self.videobox.set_keymap(keymap)
+		
+	def on_set_commandmap(self, commandmap):
+		self.quit = commandmap['quit']
 		
 	def update_time(self, pos, dur):
 		self.videobox.update_time(pos, dur)
@@ -182,19 +188,14 @@ class GUI(gtk.Window):
 	def start(self):
 		gtk.gdk.threads_init()
 		
-	def destroy(self, window):
+	def destroy(self, window=None):
 		self.quit()
 		
 	def connect(self, which, func, *args, **kwargs):
 		if which in VideoBox.signals:
 			self.videobox.connect(which, func, *args, **kwargs)
-		#elif which == 'destroy':
-			#gtk.Window.connect(self, 'destroy', self.videobox.on_signal, (func,args,kwargs))
 		else:
 			gtk.Window.connect(self, which, *args)
-		
-	def set_keymap(self, keymap):
-		self.videobox.set_keymap(keymap)
 		
 	def on_movie_window_clicked(self, event):
 		if event.type == gtk.gdk.BUTTON_PRESS and event.button == 3:

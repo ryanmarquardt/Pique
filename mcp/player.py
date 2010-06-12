@@ -14,7 +14,7 @@ import time
 import traceback
 
 from common import *
-from thread import BgThread
+from bgthread import BgThread
 
 TIMEOUT = 3
 
@@ -57,9 +57,13 @@ StateMap = {
 	gst.STATE_NULL: STATE_STOPPED
 }
 
-class Player(object):
-	dependencies = ('mcp.library.Library', 'mcp.playlist.Playlist')
+class Player(PObject):
 	def __init__(self, confitems):
+		PObject.__init__(self)
+		self.dependencies = {
+			'mcp.library.Library':self.on_set_library,
+			'mcp.playlist.Playlist':self.on_set_playlist,
+		}
 		config = dict(confitems)
 		self.state_change_lock = threading.Lock()
 		
@@ -79,13 +83,15 @@ class Player(object):
 		self.bus.add_signal_watch()
 		self.bus.enable_sync_message_emission()
 		self.bus.connect('message::async-done', self.on_async_done)
+		self.bus.connect('message::state-changed', self.on_state_changed)
+		self.bus.connect('message::error', self.on_error)
 		self.connect('error', self.on_private_error)
 		
 		self.last_update = ()
 		self.last_error = None
 		self.state_change_pending = threading.Lock()
 		self.state_change_done = threading.Event()
-		self.updatethread = PlayThread(self.emit_update, 0.1)
+		self.updatethread = PlayThread(lambda:self.emit('update', self.get_position(), self.get_duration()), 0.1)
 		
 		self.commands = {
 			'next':			self.next,
@@ -103,16 +109,14 @@ class Player(object):
 			'mute':			lambda:self.set_volume(0, True),
 			'status':		self.status,
 		}
-
-	def on_dep_available(self, name, dep):
-		if name == 'mcp.library.Library':
-			self.lib = dep
-		elif name == 'mcp.playlist.Playlist':
-			self.playlist = dep
-			self.playlist.connect('changed', self.on_playlist_changed)
-			self.playlist.connect('new-uri-available', self.on_playlist_new_uri)
-		else:
-			raise Exception
+	
+	def on_set_library(self, library):
+		self.lib = library
+	
+	def on_set_playlist(self, playlist):
+		self.playlist = playlist
+		self.playlist.connect('changed', self.on_playlist_changed)
+		self.playlist.connect('new-uri-available', self.on_playlist_new_uri)
 			
 	def on_playlist_changed(self):
 		debug('playlist changed')
@@ -123,41 +127,40 @@ class Player(object):
 		self.load(uri)
 			
 	def on_private_error(self, error):
+		debug('State Change Error')
 		self.last_error = Error(*error)
 		self.state_change_done.set()
 		
 	def on_async_done(self, bus, message):
+		debug('State Change Finished')
 		self.state_change_done.set()
 		self.last_error = None
 			
+	def on_state_changed(self, bus, message):
+		_, new, _ = message.parse_state_changed()
+		if new in StateMap:
+			self.emit('state-changed', StateMap[new])
+			
+	def on_error(self, bus, message):
+		self.emit('error', message.parse_error())
+		
 	def set_state(self, state):
 		with self.state_change_pending:
 			self.state_change_done.clear()
 			result = self.player.set_state(state)
 			debug('state change result =', result)
 			if result != gst.STATE_CHANGE_SUCCESS:
-				self.state_change_done.wait(TIMEOUT)
+				if self.state_change_done.wait(TIMEOUT):
+					debug('State Change Timed Out')
 				if self.last_error:
 					raise self.last_error
 			
 	def start(self):
 		self.updatethread.start()
-		self.next()
 		
 	def quit(self):
 		self.stop()
-		
-	def emit_update(self):
-		try:
-			pos, dur = self.get_position(), self.get_duration()
-			if (pos,dur) != self.last_update:
-				self.last_update = pos,dur
-				struct = gst.structure_from_string('update,position=(gint64)%d,duration=(gint64)%d' % (pos,dur))
-				m = gst.message_new_custom(gst.MESSAGE_APPLICATION, self.player, struct)
-				self.bus.post(m)
-		except:
-			traceback.print_exc()
-		
+	
 	@property
 	def bus(self):
 		return self.player.get_bus()
@@ -176,32 +179,6 @@ class Player(object):
 		if self._window is not None:
 			self.video_sink.set_xwindow_id(self._window.window.xid)
 			
-	def on_state_changed(self, bus, message, callback, *args):
-		_, new, _ = message.parse_state_changed()
-		if new in StateMap:
-			callback(StateMap[new], *args)
-			
-	def on_update(self, bus, message, cb):
-		func, args, kwargs = cb
-		pos = message.structure['position']
-		dur = message.structure['duration']
-		return func(pos, dur, *args, **kwargs)
-		
-	def on_error(self, bus, message, cb):
-		func, args, kwargs = cb
-		return func(message.parse_error(), *args, **kwargs)
-		
-	def connect(self, which, func, *args, **kwargs):
-		debug('connecting', which, func, args, kwargs)
-		if which == 'state-changed':
-			self.bus.connect('message::state-changed', self.on_state_changed, func, *args)
-		elif which == 'update':
-			self.bus.connect('message::application', self.on_update, (func, args, kwargs))
-		elif which == 'error':
-			self.bus.connect('message::error', self.on_error, (func, args, kwargs))
-		else:
-			self.bus.connect('message::%s' % which, func, *args)
-	
 	def seek(self, new, absolute=True):
 		if not absolute:
 			new = max(0, new + self.get_position(percent=percent))

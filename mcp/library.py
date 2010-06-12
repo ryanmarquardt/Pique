@@ -46,7 +46,6 @@ def select(c, which, **where):
 from common import *
 
 class Library(collections.MutableMapping):
-	dependencies = ()
 	def __init__(self, items):
 		self.__db = {}
 		self.path = os.path.expanduser(dict(items)['path'])

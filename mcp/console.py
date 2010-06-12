@@ -1,22 +1,24 @@
-import thread
+import bgthread
 import rawtty
 
-class ConsoleThread(thread.BgThread):
+class ConsoleThread(bgthread.BgThread):
 	name = 'ConsoleThread'
-	dependencies = ('mcp.keymap.KeyMap',)
+	def __init__(self, *args, **kwargs):
+		bgthread.BgThread.__init__(self, *args, **kwargs)
+		self.dependencies = {'mcp.keymap.KeyMap':self.on_set_keymap}
+		
 	def connect(self, key, func, *args, **kwargs):
 		self.keymap[key] = func,args,kwargs
 		
-	def on_dep_available(self, name, dep):
-		if name == 'mcp.keymap.KeyMap':
-			self.handler = dep.interpret
+	def on_set_keymap(self, keymap):
+		self.handler = keymap.interpret
 		
 	def init(self):
 		self.rawtty = rawtty.rawtty(timeout=0.3, quit='eof')
 		
 	def start(self):
 		self.rawtty.start()
-		thread.BgThread.start(self)
+		bgthread.BgThread.start(self)
 	
 	def main(self, confitems):
 		try:

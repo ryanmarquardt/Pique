@@ -1,6 +1,6 @@
 from common import *
 from player import Error as PlayerError
-import thread
+import bgthread
 
 import collections
 import socket
@@ -8,7 +8,7 @@ import traceback
 
 NetFormat = str
 
-class ConnectionThread(thread.BgThread):
+class ConnectionThread(bgthread.BgThread):
 	def main(self, commandmap, sock, address):
 		self.sock = sock
 		self.name = "Client %s:%i" % address
@@ -65,9 +65,13 @@ class ConnectionThread(thread.BgThread):
 		else:
 			self.sock.send('ERR: %s\n\n' % err)
 		
-class NetThread(thread.BgThread):
+class NetThread(bgthread.BgThread):
 	name = "NetworkThread"
-	dependencies = ('commandmap',)
+	
+	def __init__(self, *args, **kwargs):
+		bgthread.BgThread.__init__(self, *args, **kwargs)
+		self.dependencies = {'commandmap':self.on_set_commandmap}
+		
 	def main(self, confitems):
 		config = dict(confitems)
 		host = config.get('listen-host', 'localhost')
@@ -81,9 +85,8 @@ class NetThread(thread.BgThread):
 			c = ConnectionThread(self.commandmap, conn, addr)
 			c.start()
 			
-	def on_dep_available(self, name, dep):
-		if name == 'commandmap':
-			self.commandmap = dep
+	def on_set_commandmap(self, commandmap):
+		self.commandmap = commandmap
 			
 	def quit(self):
 		pass

@@ -1,3 +1,4 @@
+import collections
 import sys
 import threading
 
@@ -45,16 +46,14 @@ class Time(long):
 def uri(path):
 	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://' + path
 
-class Plugin(object):
-	def __init__(self, path):
-		self.name = path.rsplit('.')[-1]
+class PObject(object):
+	def __init__(self):
+		self.callbacks = collections.defaultdict(list)
+	
+	def connect(self, which, func, *args, **kwargs):
+		self.callbacks[which].append((func,args,kwargs))
 		
-	def on_dep_available(self, path, obj):
-		pass
-		
-	def start(self):
-		pass
-		
-	def quit(self):
-		pass
+	def emit(self, signal, *args):
+		for f,a,k in self.callbacks[signal]:
+			f(*(args+a), **k)
 		
