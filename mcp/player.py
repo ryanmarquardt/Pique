@@ -200,7 +200,6 @@ class Player(PObject):
 	def play(self):
 		debug('play')
 		self.set_state('playing')
-		self.refresh_xid()
 		
 	def pause(self):
 		debug('pause')
@@ -256,6 +255,7 @@ class Player(PObject):
 		self.player.set_property('uri', uri)
 		rgtags = 'replaygain-reference-level','replaygain-track-gain','replaygain-track-peak'
 		self.taginject.props.tags = ','.join(['%s=%s' % (k,tags[k.replace('-','_')]) for k in rgtags])
+		self.refresh_xid()
 		
 def gsub(func):
 	main = gobject.MainLoop()

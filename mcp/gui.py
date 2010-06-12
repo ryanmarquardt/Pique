@@ -171,6 +171,7 @@ class GUI(gtk.Window):
 		self.connect('next', start_new_thread, player.next, ())
 		self.connect('previous', start_new_thread, player.previous, ())
 		self.connect('position', start_new_thread, player.seek, ())
+		self.stop = player.stop
 		#self.connect('volume', player.set_volume)
 		
 	def on_set_keymap(self, keymap):
@@ -189,6 +190,7 @@ class GUI(gtk.Window):
 		gtk.gdk.threads_init()
 		
 	def destroy(self, window=None):
+		self.stop()
 		self.quit()
 		
 	def connect(self, which, func, *args, **kwargs):
