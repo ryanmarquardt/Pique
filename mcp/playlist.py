@@ -12,13 +12,12 @@ class Playlist(PObject):
 		self.entries = ()
 		self.version = 0
 		self.commands = {
-			'playlist-add':		self.add,
-			'playlist-load':	self.load,
-			'playlist-clear':	self.clear,
-			'playlist-repeat':	self.set_repeat,
-			'playlist-random':	self.set_random,
-			'playlist-list':	lambda:'\n'.join(self.entries),
-			'findadd':			self.findadd,
+			'add':		self.add,
+			'clear':	self.clear,
+			'repeat':	self.set_repeat,
+			'random':	self.set_random,
+			'list':		lambda:'\n'.join(self.entries),
+			'findadd':	self.findadd,
 		}
 		
 	def on_set_library(self, library):
