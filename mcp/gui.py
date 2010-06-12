@@ -10,9 +10,10 @@ import gobject
 
 sys.argv = args
 
-class VideoBox(gtk.VBox):
+class VideoBox(PObject, gtk.VBox):
 	def __init__(self):
 		gtk.VBox.__init__(self)
+		PObject.__init__(self)
 		
 		self.movie_window = gtk.DrawingArea()
 		self.movie_window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color(0,0,0))
@@ -69,6 +70,13 @@ class VideoBox(gtk.VBox):
 		gtk.VBox.pack_start(self, self.movie_window, True, True)
 		gtk.VBox.pack_start(self, self.buttons, False, False)
 		
+		self.play_pause.connect('clicked', self.on_signal, 'play-pause')
+		self.previous.connect('clicked', self.on_signal, 'previous')
+		self.next.connect('clicked', self.on_signal, 'next')
+		self.slider.get_child().connect('change-value', self.on_signal, 'position')
+		self.movie_window.connect('button-press-event', self.on_button_press_event)
+		self.movie_window.connect('expose-event', self.on_signal, 'xid-request')
+		
 	def set_keymap(self, keymap):
 		debug('GUI Set Keymap')
 		self.movie_window.add_events(gtk.gdk.KEY_PRESS_MASK)
@@ -82,30 +90,11 @@ class VideoBox(gtk.VBox):
 		accel = gtk.accelerator_name(event.keyval, event.state & modifiers)
 		thread.start_new_thread(self.keymap.interpret, (accel,))
 		
-	signals = 'play-pause', 'previous', 'next', 'position', 'xid-request', 'clicked'
-	def connect(self, which, callback, *args, **kwargs):
-		if which == 'play-pause':
-			self.play_pause.connect('clicked', self.on_signal, (callback, args, kwargs))
-		elif which == 'previous':
-			self.previous.connect('clicked', self.on_signal, (callback, args, kwargs))
-		elif which == 'next':
-			self.next.connect('clicked', self.on_signal, (callback, args, kwargs))
-		elif which == 'position':
-			self.slider.get_child().connect('change-value', self.on_signal, (callback, args, kwargs))
-		elif which == 'clicked':
-			self.movie_window.connect('button-press-event', self.on_button_press_event, (callback, args, kwargs))
-		elif which == 'xid-request':
-			self.movie_window.connect('expose-event', self.on_signal, (callback, args, kwargs))
-		else:
-			gtk.VBox.connect(self, which, callback, *args)
-	
-	def on_button_press_event(self, window, event, cb):
-		func, args, kwargs = cb
-		return func(event, *args, **kwargs)
+	def on_button_press_event(self, window, event):
+		self.emit('clicked', window, event)
 		
-	def on_signal(self, *args):
-		func, args, kwargs = args[-1]
-		return func(*args, **kwargs)
+	def on_signal(self, widget, event, signal):
+		self.emit(signal)
 		
 	def on_format_time(self, w, v):
 		pos, dur = self.position.get_value(), self.position.get_upper()
@@ -172,10 +161,10 @@ class GUI(gtk.Window):
 		player.window = self.videobox.movie_window
 		player.connect('state-changed', self.update_state)
 		player.connect('update', self.update_time)
-		self.connect('play-pause', thread.start_new_thread, player.play_pause, ())
-		self.connect('next', thread.start_new_thread, player.next, ())
-		self.connect('previous', thread.start_new_thread, player.previous, ())
-		self.connect('position', thread.start_new_thread, player.seek, ())
+		self.videobox.connect('play-pause', thread.start_new_thread, player.play_pause, ())
+		self.videobox.connect('next', thread.start_new_thread, player.next, ())
+		self.videobox.connect('previous', thread.start_new_thread, player.previous, ())
+		self.videobox.connect('position', thread.start_new_thread, player.seek, ())
 		self.stop = player.stop
 		#self.connect('volume', player.set_volume)
 		
@@ -197,12 +186,6 @@ class GUI(gtk.Window):
 	def destroy(self, window=None):
 		self.stop()
 		self.quit()
-		
-	def connect(self, which, func, *args, **kwargs):
-		if which in VideoBox.signals:
-			self.videobox.connect(which, func, *args, **kwargs)
-		else:
-			gtk.Window.connect(self, which, *args)
 		
 	def on_movie_window_clicked(self, event):
 		if event.type == gtk.gdk.BUTTON_PRESS and event.button == 3:
