@@ -21,6 +21,7 @@ class PluginManager(collections.defaultdict):
 	def __init__(self, conf):
 		self.conf = conf
 		self['commandmap'] = {'quit': self.quit}
+		self['commandmap']['commands'] = self['commandmap'].keys
 		self.order = collections.deque()
 		for _, path in conf.items('Plugins'):
 			self[path]

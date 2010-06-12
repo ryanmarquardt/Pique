@@ -50,7 +50,7 @@ class Library(collections.MutableMapping):
 		self.__db = {}
 		self.path = os.path.expanduser(dict(items)['path'])
 		self.commands = {
-			'library-search':	self.search,
+			'find':	self.find,
 		}
 	
 	def __del__(self):
@@ -142,19 +142,11 @@ class Library(collections.MutableMapping):
 		for i in c:
 			yield Row._make(i)
 			
-	def search(self, *args):
-		pass
-			
-	def select_uris(self, **kwargs):
+	def find(self, type, what):
 		c = self.db.cursor()
-		if kwargs:
-			sql = 'select uri from %s where ' % TABLE_VERSION + \
-			  ','.join([k + ' regexp ?' for k in kwargs.keys()])
-		else:
-			sql = 'select uri from %s' % TABLE_VERSION
-		c.execute(sql, kwargs.values())
-		for i in c:
-			yield i[0]
+		sql = 'select uri from %s where %s=?' % (TABLE_VERSION,type)
+		c.execute(sql, (what,))
+		return [i[0] for i in c]
 			
 	def update(self, uri, **kwargs):
 		c = self.db.cursor()

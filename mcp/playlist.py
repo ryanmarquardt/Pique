@@ -4,6 +4,7 @@ from common import *
 class Playlist(PObject):
 	def __init__(self, uris=[], repeat=False, random=False):
 		PObject.__init__(self)
+		self.dependencies = {'mcp.library.Library': self.on_set_library}
 		self.repeat = repeat
 		self.random = random
 		self.history = collections.deque()
@@ -17,7 +18,11 @@ class Playlist(PObject):
 			'playlist-repeat':	self.set_repeat,
 			'playlist-random':	self.set_random,
 			'playlist-list':	lambda:'\n'.join(self.entries),
+			'findadd':			self.findadd,
 		}
+		
+	def on_set_library(self, library):
+		self.library = library
 		
 	def load(self, uris):
 		self.clear()
@@ -27,6 +32,10 @@ class Playlist(PObject):
 		
 	def add(self, uri):
 		self.load(self.entries + (uri,))
+		
+	def findadd(self, type, what):
+		uris = self.library.find(type, what)
+		self.load(self.entries + tuple(uris))
 		
 	def _extend(self):
 		if self.random:

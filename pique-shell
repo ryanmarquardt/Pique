@@ -22,8 +22,9 @@ else:
 	while True:
 		try:
 			cmd = shlex.split(raw_input(prompt))
-			result = serv.ask(*cmd)
-			print result
+			if cmd and cmd[0][0] != '#':
+				result = serv.ask(*cmd)
+				print result
 		except EOFError:
 			break
 	if os.isatty(sys.stdin.fileno()): print
