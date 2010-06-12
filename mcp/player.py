@@ -110,12 +110,17 @@ class Player(object):
 		elif name == 'mcp.playlist.Playlist':
 			self.playlist = dep
 			self.playlist.connect('changed', self.on_playlist_changed)
+			self.playlist.connect('new-uri-available', self.on_playlist_new_uri)
 		else:
 			raise Exception
 			
 	def on_playlist_changed(self):
+		debug('playlist changed')
 		if not self.isplaying():
 			self.next()
+			
+	def on_playlist_new_uri(self, uri):
+		self.load(uri)
 			
 	def on_private_error(self, error):
 		self.last_error = Error(*error)

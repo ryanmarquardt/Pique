@@ -25,7 +25,6 @@ class RawClient(object):
 			self.leftover += self.sock.recv(BUFSIZE)
 		result, _, self.leftover = self.leftover.partition('\n\n')
 		return result
-		
 
 class Client(RawClient):
 	pass

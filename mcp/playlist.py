@@ -23,6 +23,7 @@ class Playlist(object):
 		self.callbacks[which].append((func,args,kwargs))
 		
 	def emit(self, signal, *args):
+		debug('Playlist.emit', signal, *args)
 		for f,a,k in self.callbacks[signal]:
 			f(*(args+a), **k)
 		
@@ -56,8 +57,7 @@ class Playlist(object):
 			self.history.rotate(-1)
 			if not self.history[0]:
 				raise StopIteration
-		for func,args,kwargs in self.callbacks['new-uri-available']:
-			func(self.history[0], *args,**kwargs)
+		self.emit('new-uri-available', self.history[0])
 		return self.history[0]
 		
 	def __len__(self):
@@ -71,8 +71,7 @@ class Playlist(object):
 		if self.history[0] is None:
 			#Backed up as far as history goes
 			raise StopIteration
-		for func,args,kwargs in self.callbacks['new-uri-available']:
-			func(self.history[0], *args,**kwargs)
+		self.emit('new-uri-available', self.history[0])
 		return self.history[0]
 		
 	def clear(self):
