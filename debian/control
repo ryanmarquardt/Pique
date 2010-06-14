@@ -11,14 +11,6 @@ Homepage: http://github.com/orbnauticus/Pique
 
 Package: pique
 Architecture: any
-Depends: ${misc:Depends}, python-pique, ${python:Depends},
-Description: 
+Depends: ${misc:Depends}, ${python:Depends},
+Description: Pique Media Center 
  Pique is a media center program inspired by mpd but also able to manage and play video files. Some features included in pique's plugin architecture include full command capabilities via a network interface, gstreamer-based playback, and simple extensibility.
-
-Package: python-pique
-Architecture: any
-Depends: ${misc:Depends}, ${python:Depends}
-Description: 
- Pique is a media center program inspired by mpd but also able to manage and play video files. Some features included in pique's plugin architecture include full command capabilities via a network interface, gstreamer-based playback, and simple extensibility.
- .
- This Package provides the client and plugin libraries.
