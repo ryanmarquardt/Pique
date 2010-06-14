@@ -1,0 +1,39 @@
+#!/usr/bin/env python
+
+import shlex
+import socket
+from mcp.client import Client
+
+class LircConfig(object):
+	def __init__(self, path, program):
+		self.program = program
+		lines = filter(None, [shlex(line, True) for line in open(path)])
+		
+		
+class LircEvent(object):
+	def __init__(self, rawline):
+		self.code, self.repeat, self.button, self.remote = rawline.split(' ',3)
+		self.repeat = int(self.repeat)
+		
+	def __repr__(self):
+		return '%s:%s (%i)' % (self.remote, self.button, self.repeat)
+
+class LircSocket(socket.socket):
+	def __init__(self, program, sock='/dev/lircd', conf='~/.lircrc'):
+		self.config = LircConfig(conf, program)
+		socket.socket.__init__(self, socket.AF_UNIX, socket.SOCK_STREAM)
+		self.connect(sock)
+		
+	def __iter__(self):
+		s = self.makefile()
+		for line in s:
+			l = LircEvent(line)
+			print l
+			yield l
+		
+if __name__=='__main__':
+	l = LircSocket()
+	for command in l:
+		cmd = shlex.split(command)
+		result = serv.ask(*cmd)
+		print result

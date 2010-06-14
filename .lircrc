@@ -1,127 +1,127 @@
 #Antec Fusion Volume Knob
 begin
-	prog = mcp
+	prog = pique
 	button = Vol+
 	repeat = 2
-	config = volume +1
+	config = volume-up
 end
 begin
-	prog = mcp
+	prog = pique
 	button = Vol-
 	repeat = 2
-	config = volume -1
+	config = volume-down
 end 
 
 begin
-	prog = mcp
+	prog = pique
 	button = UP
 	#repeat = 2
-	config = menu.up
+	config = menu-up
 end
 begin
-	prog = mcp
+	prog = pique
 	button = DOWN
 	#repeat = 2
-	config = menu.down
+	config = menu-down
 end
 begin
-	prog = mcp
+	prog = pique
 	button = DISPLAY
 	config = fullscreen
 end
 begin
-	prog = mcp
+	prog = pique
 	button = STOP
 	config = stop
 end
 begin
-	prog = mcp
+	prog = pique
 	button = MENU
-	config = menu.show
+	config = show-menu
 end
 begin
-	prog = mcp
+	prog = pique
 	button = INFO
 	config = info
 end
 begin
-	prog = mcp
+	prog = pique
 	button = EXIT
-	config = menu.exit
+	config = menu-exit
 end
 begin
-	prog = mcp
+	prog = pique
 	button = LEFT
-	config = menu.left
+	config = menu-left
 end
 begin
-	prog = mcp
+	prog = pique
 	button = RIGHT
-	config = menu.right
+	config = menu-right
 end
 begin
-	prog = mcp
+	prog = pique
 	button = SELECT
-	config = menu.select
+	config = menu-select
 end
 begin
-	prog = mcp
+	prog = pique
 	button = SKIP-
-	config = prev
+	config = previous
 end
 begin
-	prog = mcp
+	prog = pique
 	button = SKIP+
 	config = next
 end
 begin
-	prog = mcp
+	prog = pique
 	button = REVERSE
 	config = seek -10
 end
 begin
-	prog = mcp
+	prog = pique
 	button = FORWARD
 	config = seek +30
 end
 begin
-	prog = mcp
+	prog = pique
 	button = PAUSE
 	config = pause
 end
 begin
-	prog = mcp
+	prog = pique
 	button = PLAY
 	config = play
 end
 begin
-	prog = mcp
+	prog = pique
 	button = BACK
-	config = menu.back
+	config = menu-back
 end
 
 begin
-	prog = mcp
+	prog = pique
 	button = 1
-	config = playlist.new category=TV "series=Aqua Teen Hunger Force"; playlist_random 1; play
+	config = random 1; findadd artist "Aqua Teen Hunger Force"; play
 end
 begin
-	prog = mcp
+	prog = pique
 	button = 2
-	config = playlist.new category=TV "series=Family Guy"; playlist_random 1; play
+	config = random 1; findadd artist "Family Guy"; play
 end
 begin
-	prog = mcp
+	prog = pique
 	button = 3
-	config = playlist.new category=TV "series=Spongebob Squarepants"; playlist_random 1; play
+	config = random 1; findadd artist "Spongebob Squarepants"; play
 end
 begin
-	prog = mcp
+	prog = pique
 	button = 4
-	config = playlist.new artist=Meshuggah; playlist.random 1; play
+	config = random 1; findadd artist Meshuggah; play
 end
 begin
-	prog = mcp
+	prog = pique
 	button = 0
-	config = kill
+	config = quit
 end
