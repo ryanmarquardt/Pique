@@ -10,7 +10,7 @@ import traceback
 
 from player import tag_reader
 
-DEFAULT_PATH = os.path.expanduser('~/.mcp-library')
+DEFAULT_PATH = os.path.expanduser('~/.pique-library')
 Versions = [
 	'media_001',
 	'media',
@@ -19,7 +19,7 @@ TABLE_VERSION = Versions[0]
 
 def Columns(version=TABLE_VERSION, names_only=False):
 	conf = ConfigParser.SafeConfigParser()
-	conf.read('/home/ryan/Projects/Pique/mcp/table-def.conf')
+	conf.read('/home/ryan/Projects/Pique/pique/table-def.conf')
 	if names_only:
 		return conf.options(version)
 	else:

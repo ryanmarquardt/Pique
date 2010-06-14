@@ -86,7 +86,7 @@ class Table(object):
 		return [self.row_class(i) for i in c]
 		
 if __name__=='__main__':
-	db = Database('/home/ryan/.mcp-library')
+	db = Database('/home/ryan/.pique-library')
 	print db.table('media_001').exists()
 	print db.table('medib').exists()
 	media001 = db.table('media_001')

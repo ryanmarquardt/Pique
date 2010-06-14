@@ -25,6 +25,7 @@ class PluginManager(collections.defaultdict):
 		self.order = collections.deque()
 		for _, path in conf.items('Plugins'):
 			self[path]
+		debug('Commands:', *sorted(self['commandmap'].keys()))
 		
 	def __missing__(self, path):
 		debug('Load plugin', path)
@@ -67,12 +68,12 @@ class PluginManager(collections.defaultdict):
 class Main(object):
 	def __init__(self):
 		conf = ConfigParser.SafeConfigParser()
-		conf.read(['./mcp.conf',os.path.expanduser('~/.mcp.conf')])
+		conf.read(['./pique.conf',os.path.expanduser('~/.pique.conf')])
 		
 		self.plugins = PluginManager(conf)
 		
-		self.plugins['mcp.player.Player'].connect('eos', self.on_eos)
-		self.plugins['mcp.player.Player'].connect('error', self.on_error)
+		self.plugins['pique.player.Player'].connect('eos', self.on_eos)
+		self.plugins['pique.player.Player'].connect('error', self.on_error)
 		
 	def start(self):
 		self.plugins.start()
