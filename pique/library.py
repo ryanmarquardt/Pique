@@ -17,19 +17,19 @@ Versions = [
 ]
 TABLE_VERSION = Versions[0]
 
-def Columns(version=TABLE_VERSION, names_only=False):
+def Columns(version=TABLE_VERSION, defs=False):
 	conf = ConfigParser.SafeConfigParser()
 	conf.read('/home/ryan/Projects/Pique/pique/table-def.conf')
-	if names_only:
-		return conf.options(version)
-	else:
+	if defs:
 		return conf.items(version)
+	else:
+		return conf.options(version)
 
 def Row(version=TABLE_VERSION):
-	return collections.namedtuple('Row', Columns(version=version, names_only=True))
+	return collections.namedtuple('Row', Columns(version=version))
 
-CREATE_TABLE = u"create table %s (%s) " % (TABLE_VERSION, ", ".join(["%s %s" % i[0:2] for i in Columns()]))
-INSERT = u"insert or replace into %s values (%s) " % (TABLE_VERSION, ",".join("?"*len(Columns())))
+CREATE_TABLE = u"create table %s (%s) " % (TABLE_VERSION, ", ".join(["%s %s" % i[0:2] for i in Columns(defs=True)]))
+INSERT = u"insert or replace into %s values (%s) " % (TABLE_VERSION, ",".join("?"*len(Columns(defs=True))))
 ORDER = u"order by artist,album,track_number "
 WHERE = u'where %s=? '
 SELECT_ALL = u'select * from %s ' % TABLE_VERSION
@@ -121,7 +121,7 @@ class Library(collections.MutableMapping):
 				tags['uri'] = u
 				if 'date' in tags:
 					tags['date'] = unicode(tags['date'])
-				rowtags = dict((k,tags.get(k,None)) for k in columns)
+				rowtags = dict((k,tags.get(k,None)) for k in Columns())
 				print rowtags
 				NewRow = Row()(**rowtags)
 				self[NewRow.uri] = NewRow
@@ -129,7 +129,7 @@ class Library(collections.MutableMapping):
 
 	def members(self, column):
 		c = self.db.cursor()
-		if column in Columns(names_only=True):
+		if column in Columns():
 			sql = 'select distinct %s from %s' % (column, TABLE_VERSION)
 			debug(sql)
 			c.execute(sql)
@@ -164,8 +164,8 @@ def upgrade(src=Versions[-1], dst=Versions[0], path=DEFAULT_PATH):
 	B = db.cursor()
 	try:
 		B.execute('drop table %s' % dst)
-		B.execute(u"create table %s (%s) " % (dst, ", ".join(["%s %s" % i for i in Columns(dst)])))
-		A.execute('select %s from %s' % (','.join(Columns(src,names_only=True)),src))
+		B.execute(u"create table %s (%s) " % (dst, ", ".join(["%s %s" % i for i in Columns(dst,defs=True)])))
+		A.execute('select %s from %s' % (','.join(Columns(src)),src))
 		for row in A:
 			print row
 			old = Row(src)(*row)._asdict()
