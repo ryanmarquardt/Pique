@@ -68,7 +68,8 @@ class PluginManager(collections.defaultdict):
 class Main(object):
 	def __init__(self):
 		conf = ConfigParser.SafeConfigParser()
-		conf.read(['./pique.conf',os.path.expanduser('~/.pique.conf')])
+		conf.readfp(open(os.path.join(os.path.dirname(__file__),'default.conf')))
+		conf.read([os.path.expanduser('~/.config/pique/pique.conf')])
 		
 		self.plugins = PluginManager(conf)
 		

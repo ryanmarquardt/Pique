@@ -3,7 +3,7 @@
 import sys
 import optparse
 
-import mcp.library
+import pique.library
 
 def abort(*message):
 	parser.print_usage()
@@ -19,7 +19,7 @@ where COMMAND is one of:\n
    help     Show info on commands
    list     List members of categories in the database
    update   Edit metadata of library entries''',
-version="%prog " + mcp.VERSION)
+version="%prog " + pique.VERSION)
 
 def get_input():
 	if not sys.stdin.isatty():
@@ -34,40 +34,40 @@ def parse(usage, opt_group=None):
 		  help="Show extra information")
 		parser.add_option('--lib-path', metavar='PATH',
 		  help="Use database found at PATH.")
-		parser.set_defaults(lib_path=mcp.library.DEFAULT_PATH)
+		parser.set_defaults(lib_path=pique.library.DEFAULT_PATH)
 		if opt_group is not None:
 			parser.add_option_group(opt_group)
 		parser.usage = usage
 		input = get_input()
 		options, args = parser.parse_args()
-		lib = mcp.library.library(options.lib_path)
+		lib = pique.library.library(options.lib_path)
 		return lib, input, options, args[1:]
 
 def init(l, input, options, args):
 	l.init()
 
 def select(l, input, options, args):
-	kwargs = dict((k,getattr(options,k)) for k in mcp.library.Columns(names_only=True) if hasattr(options, k) and getattr(options,k) is not None)
+	kwargs = dict((k,getattr(options,k)) for k in pique.library.Columns(names_only=True) if hasattr(options, k) and getattr(options,k) is not None)
 	for uri in input:
 		print uri
 	for uri in l.select_uris(**kwargs):
 		print uri
 
 def add(l, input, options, args):
-	kwargs = dict((k,getattr(options,k)) for k in mcp.library.Columns(names_only=True) if hasattr(options, k) and getattr(options,k) is not None)
+	kwargs = dict((k,getattr(options,k)) for k in pique.library.Columns(names_only=True) if hasattr(options, k) and getattr(options,k) is not None)
 	l.add(args, **kwargs)
 
 def list(l, input, options, args):
 	if not len(args):
 		abort('Need a category')
-	elif args[0] not in mcp.library.Columns(names_only=True):
+	elif args[0] not in pique.library.Columns(names_only=True):
 		abort('Invalid category name')
 	for row in l.members(args[0]):
 		if row is not None:
 			print row
 		
 def update(l, input, options, args):
-	kwargs = dict((k,getattr(options,k)) for k in mcp.library.Columns(names_only=False) if hasattr(options, k) and getattr(options,k) is not None)
+	kwargs = dict((k,getattr(options,k)) for k in pique.library.Columns(names_only=False) if hasattr(options, k) and getattr(options,k) is not None)
 	for uri in input:
 		l.update(uri, **kwargs)
 
@@ -105,7 +105,7 @@ Adds URIs or PATHs to the library.'''
 	elif cmd == 'list':
 		list_usage = '''%%prog list CATEGORY\n
 Lists all members of CATEGORY in the database. CATEGORY must be one of:
-%s.''' % ', '.join(mcp.library.Columns(names_only=True))
+%s.''' % ', '.join(pique.library.Columns(names_only=True))
 		list(*parse(list_usage))
 	elif cmd == 'update':
 		update_options = optparse.OptionGroup(parser, 'Update Options')

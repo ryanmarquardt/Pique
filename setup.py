@@ -18,7 +18,7 @@ setup(name='pique', version='0.01',
 	description='Pique Media Center',
 	url='http://orbnauticus.github.org/pique',
 	packages=['pique'],
-	package_data={'pique': ['table-def.conf']},
+	package_data={'pique': ['table-def.conf', 'default.conf']},
 	license='Simplified BSD License',
 	scripts=['piqued'] + find('tools'),
 )

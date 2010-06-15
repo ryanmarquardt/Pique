@@ -2,7 +2,7 @@
 
 import shlex
 import socket
-from mcp.client import Client
+from pique.client import Client
 
 class LircConfig(object):
 	def __init__(self, path, program):
