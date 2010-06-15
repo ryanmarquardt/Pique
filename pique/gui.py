@@ -73,7 +73,8 @@ class VideoBox(PObject, gtk.VBox):
 		self.play_pause.connect('clicked', self.on_signal, 'play-pause')
 		self.previous.connect('clicked', self.on_signal, 'previous')
 		self.next.connect('clicked', self.on_signal, 'next')
-		self.slider.get_child().connect('change-value', self.on_signal, 'position')
+		self.slider.get_child().connect('change-value', self.on_slider)
+		self.slider.get_child().connect('scroll-event', debug)
 		self.movie_window.connect('button-press-event', self.on_button_press_event)
 		self.movie_window.connect('expose-event', self.on_signal, 'xid-request')
 		
@@ -93,8 +94,11 @@ class VideoBox(PObject, gtk.VBox):
 	def on_button_press_event(self, window, event):
 		self.emit('clicked', window, event)
 		
-	def on_signal(self, widget, event, signal):
-		self.emit(signal)
+	def on_signal(self, *args):
+		self.emit(args[-1])
+
+	def on_slider(self, range, scroll, value):
+		self.emit('position', value)
 		
 	def on_format_time(self, w, v):
 		pos, dur = self.position.get_value(), self.position.get_upper()
@@ -164,7 +168,7 @@ class GUI(gtk.Window):
 		self.videobox.connect('play-pause', thread.start_new_thread, player.play_pause, ())
 		self.videobox.connect('next', thread.start_new_thread, player.next, ())
 		self.videobox.connect('previous', thread.start_new_thread, player.previous, ())
-		self.videobox.connect('position', thread.start_new_thread, player.seek, ())
+		self.videobox.connect('position', lambda x:thread.start_new_thread(player.seek,(x,)))
 		self.stop = player.stop
 		#self.connect('volume', player.set_volume)
 		

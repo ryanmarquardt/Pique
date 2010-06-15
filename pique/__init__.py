@@ -28,11 +28,11 @@ class Configuration(object):
 
 class PluginManager(collections.defaultdict):
 	def __init__(self):
-		self.conf = configuration()
+		self.conf = Configuration()
 		self['commandmap'] = {'quit': self.quit}
 		self['commandmap']['commands'] = self['commandmap'].keys
 		self.order = collections.deque()
-		for _, path in conf['Plugins']:
+		for _, path in self.conf['Plugins']:
 			self[path]
 		debug('Commands:', *sorted(self['commandmap'].keys()))
 		
@@ -41,7 +41,7 @@ class PluginManager(collections.defaultdict):
 		#load plugin
 		plugin = importfrom(path)
 		try:
-			items = self.conf.items(plugin.__name__)
+			items = self.conf[plugin.__name__]
 		except ConfigParser.NoSectionError:
 			items = ()
 		p = plugin(items)
