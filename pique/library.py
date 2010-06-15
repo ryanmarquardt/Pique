@@ -68,7 +68,7 @@ class Library(collections.MutableMapping):
 
 	def init(self):
 		c = self.db.cursor()
-		c.execute(u'drop table %s' % TABLE_VERSION)
+		c.execute(u'drop table if exists %s' % TABLE_VERSION)
 		c.execute(CREATE_TABLE)
 		self.db.commit()
 		verbose("Successfully initialized library at", repr(self.path))

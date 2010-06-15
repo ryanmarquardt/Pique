@@ -17,13 +17,22 @@ def importfrom(path):
 	
 class PluginError(Exception): pass
 
+class Configuration(object):
+	def __init__(self):
+		self.conf = ConfigParser.SafeConfigParser()
+		self.conf.readfp(open(os.path.join(os.path.dirname(__file__), 'default.conf')))
+		self.conf.read([os.path.expanduser('~/.config/pique/pique.conf')])
+	
+	def __getitem__(self, key):
+		return self.conf.items(key)
+
 class PluginManager(collections.defaultdict):
-	def __init__(self, conf):
-		self.conf = conf
+	def __init__(self):
+		self.conf = configuration()
 		self['commandmap'] = {'quit': self.quit}
 		self['commandmap']['commands'] = self['commandmap'].keys
 		self.order = collections.deque()
-		for _, path in conf.items('Plugins'):
+		for _, path in conf['Plugins']:
 			self[path]
 		debug('Commands:', *sorted(self['commandmap'].keys()))
 		
@@ -67,12 +76,7 @@ class PluginManager(collections.defaultdict):
 
 class Main(object):
 	def __init__(self):
-		conf = ConfigParser.SafeConfigParser()
-		conf.readfp(open(os.path.join(os.path.dirname(__file__),'default.conf')))
-		conf.read([os.path.expanduser('~/.config/pique/pique.conf')])
-		
-		self.plugins = PluginManager(conf)
-		
+		self.plugins = PluginManager()
 		self.plugins['pique.player.Player'].connect('eos', self.on_eos)
 		self.plugins['pique.player.Player'].connect('error', self.on_error)
 		

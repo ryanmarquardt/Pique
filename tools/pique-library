@@ -30,17 +30,18 @@ def parse(usage, opt_group=None):
 	if help:
 		abort()
 	else:
+		conf = dict(pique.Configuration()['Library'])
 		parser.add_option('-v', '--verbose', action="count",
 		  help="Show extra information")
 		parser.add_option('--lib-path', metavar='PATH',
 		  help="Use database found at PATH.")
-		parser.set_defaults(lib_path=pique.library.DEFAULT_PATH)
+		parser.set_defaults(lib_path=conf['path'])
 		if opt_group is not None:
 			parser.add_option_group(opt_group)
 		parser.usage = usage
 		input = get_input()
 		options, args = parser.parse_args()
-		lib = pique.library.library(options.lib_path)
+		lib = pique.library.Library(conf)
 		return lib, input, options, args[1:]
 
 def init(l, input, options, args):
