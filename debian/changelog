@@ -1,3 +1,11 @@
+pique (0.01.1) maverick; urgency=low
+
+  * Various regression fixes to basic functionality:
+    --> pique-library init and add work as expected
+    --> gui buttons and slider respond to input
+
+ -- Ryan Marquardt <ryan.marquardt@gmail.com>  Mon, 15 Jun 2010 11:11:00 -0700
+
 pique (0.01) maverick; urgency=low
 
   * Initial packaging.
