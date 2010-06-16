@@ -1,17 +1,33 @@
+// General
+
+* Improve deb packaging: eliminate lintian errors and warnings
+  --> W: pique source: missing-debian-source-format
+      W: pique: extended-description-line-too-long
+      W: pique: binary-without-manpage usr/bin/pique-library
+      W: pique: binary-without-manpage usr/bin/pique-lirc
+      W: pique: binary-without-manpage usr/bin/pique-shell
+      W: pique: binary-without-manpage usr/bin/piqued
+ * write a .desktop file
+
+
 // Library
 
 * Allow reorganization of files in library folder
 * Support library:// style uris, which are agnostic of the rest of the filesystem.
 
+
 // Player
 
 * Album Art
 * On-screen display
+* Set force aspect ratio to false when only displaying visualization
+
 
 // Clients
 
 * Write lirc client
 * Write compatibility layer for existing mpd clients
+
 
 // Documentation
 
