@@ -1,0 +1,20 @@
+// Library
+
+* Allow reorganization of files in library folder
+* Support library:// style uris, which are agnostic of the rest of the filesystem.
+
+// Player
+
+* Album Art
+* On-screen display
+
+// Clients
+
+* Write lirc client
+* Write compatibility layer for existing mpd clients
+
+// Documentation
+
+* Man pages for piqued and tools
+* Document API
+* Expand github wiki
