@@ -27,6 +27,7 @@
 
 * Write lirc client
 * Write compatibility layer for existing mpd clients
+* When 'quit' is issued, network thread should close all client connections.
 
 
 // Documentation
