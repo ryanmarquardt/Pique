@@ -72,7 +72,7 @@ def parse(usage, opt_group=None):
 		return lib, input, options, args[1:]
 
 def init(l, input, options, args):
-	l.init()
+	l.clear()
 
 def select(l, input, options, args):
 	kwargs = dict((k,getattr(options,k)) for k in pique.library.Columns(names_only=True) if hasattr(options, k) and getattr(options,k) is not None)
@@ -88,9 +88,9 @@ def add(l, input, options, args):
 def list(l, input, options, args):
 	if not len(args):
 		abort('Need a category')
-	elif args[0] not in pique.library.Columns():
+	elif args[0] not in l.header:
 		abort('Invalid category name')
-	for row in l.members(args[0]):
+	for row in l.select_distinct(args[0]):
 		if row is not None:
 			print row
 		

@@ -36,6 +36,7 @@ import gobject
 
 sys.argv = args
 
+import datetime
 import Queue
 import threading
 import time
@@ -307,6 +308,12 @@ def gsub(func):
 			return r
 	return g
 	
+def convert(obj):
+	if hasattrs(obj, ['year','month','day']):
+		return datetime.datetime(obj.year,obj.month,obj.day)
+	else:
+		return obj
+
 class tag_reader(object):
 	def __init__(self):
 		self.playbin = Element('playbin')
@@ -339,9 +346,11 @@ class tag_reader(object):
 				elif msg.type & gst.MESSAGE_TAG:
 					taglist = msg.parse_tag()
 					for k in taglist.keys():
-						tags[k.replace('-','_')] = taglist[k]
+						k,v = k.replace('-','_'),convert(taglist[k])				
+						tags[k] = v
 			tags['duration'] = self.playbin.query_duration(gst.FORMAT_TIME, None)[0]
+		except Exception, e:
+			raise e
 		finally:
 			self.playbin.set_state('null')
-			print tags
-			return tags
+		return tags

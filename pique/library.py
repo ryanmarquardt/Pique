@@ -28,106 +28,87 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import collections
-import ConfigParser
 import os.path
-import re
-import sqlite3
-import threading
-import traceback
+import time
 
 from player import tag_reader
+from common import *
 
-DEFAULT_PATH = os.path.expanduser('~/.pique-library')
 Versions = [
 	'media_001',
 	'media',
 ]
 TABLE_VERSION = Versions[0]
 
-def Columns(version=TABLE_VERSION, defs=False):
-	conf = ConfigParser.SafeConfigParser()
-	conf.read('/home/ryan/Projects/Pique/pique/table-def.conf')
-	if defs:
-		return conf.items(version)
-	else:
-		return conf.options(version)
+def reval(expr, **includes):
+	return eval(expr, {'__builtins__':[]}, includes)
 
-def Row(version=TABLE_VERSION):
-	return collections.namedtuple('Row', Columns(version=version))
+def Columns(version=TABLE_VERSION):
+	return filter(None, open(os.path.join(os.path.dirname(__file__),'table-def.conf')).read().split('\n'))
 
-CREATE_TABLE = u"create table %s (%s) " % (TABLE_VERSION, ", ".join(["%s %s" % i[0:2] for i in Columns(defs=True)]))
-INSERT = u"insert or replace into %s values (%s) " % (TABLE_VERSION, ",".join("?"*len(Columns(defs=True))))
-ORDER = u"order by artist,album,track_number "
-WHERE = u'where %s=? '
-SELECT_ALL = u'select * from %s ' % TABLE_VERSION
-SELECT_URI = u'select uri from %s ' % TABLE_VERSION
-DELETE = u'delete from %s where uri=?' % TABLE_VERSION
+class Table(collections.MutableMapping):
+	def __init__(self, columns):
+		self.header = columns
+		self.elements = {}
+		self.Row = collections.namedtuple('Row', columns)
 
-def select(c, which, **where):
-	sql = 'select %s from %s' % (which,TABLE_VERSION)
-	if where:
-		sql += ' where ' + ','.join(['%s=?' % k for k in where])
-	print sql
-	c.execute(sql, where.values())
+	def __getitem__(self, index):
+		return self.elements[index]
 
-from common import *
+	def __setitem__(self, index, value):
+		if isinstance(value, collections.Mapping):
+			self.elements[index] = self.Row(**value)
+		elif isinstance(value, collections.Sequence):
+			self.elements[index] = self.Row(*value)
 
-class Library(collections.MutableMapping):
+	def __delitem__(self, index):
+		del self.elements[index]
+
+	def __len__(self):
+		return len(self.elements)
+
+	def __iter__(self):
+		return iter(sorted(self.elements.values(),key=lambda x:(x.artist,x.album,x.track_number)))
+
+	def select(self, **where):
+		items = where.items()
+		return [row for row in map(self.Row._make,self) if all(getattr(row,k)==v for k,v in items)]
+
+	def select_distinct(self, which):
+		return sorted(list(set(getattr(row, which) for row in self.elements.itervalues())))
+
+	def dump(self, f):
+		if not hasattr(f, 'fileno'):
+			f = open(f,'w')
+		f.write(repr(self.header) + '\n')
+		for row in self:
+			f.write(repr(row) + '\n')
+
+	def load(self, f):
+		if not hasattr(f, 'readline'):
+			f = open(f,'r')
+		Table.__init__(self, reval(f.readline()))
+		for line in f:
+			row = reval(line, Row=self.Row)
+			self.elements[row.uri] = row
+
+class Library(Table):
 	def __init__(self, items):
-		self.__db = {}
 		self.path = os.path.expanduser(dict(items)['path'])
+		try:
+			self.load(self.path)
+		except Exception, e:
+			verbose("Couldn't load library from disk; using empty database.")
+			verbose(e)
+			Table.__init__(self, Columns())
 		self.commands = {
 			'find':	self.find,
 		}
-	
-	def __del__(self):
-		for db in self.__db.values():
-			db.commit()
-			db.close()
-			
-	@property
-	def db(self):
-		t = threading.currentThread()
-		if t not in self.__db:
-			self.__db[t] = sqlite3.connect(self.path)
-			self.__db[t].create_function('regexp', 2, lambda x,i:bool(re.match(x,i)))
-		return self.__db[t]
 
-	def init(self):
-		c = self.db.cursor()
-		c.execute(u'drop table if exists %s' % TABLE_VERSION)
-		c.execute(CREATE_TABLE)
-		self.db.commit()
+	def clear(self):
+		Table.__init__(self, self.header)
+		self.dump(open(self.path,'w'))
 		verbose("Successfully initialized library at", repr(self.path))
-		
-	def __iter__(self):
-		c = self.db.cursor()
-		select(c, 'uri')
-		for row in c:
-			yield row[0]
-		
-	def __len__(self):
-		c = self.db.cursor()
-		select(c, 'uri')
-		return len(list(c))
-		
-	def __getitem__(self, uri):
-		c = self.db.cursor()
-		select(c, '*', uri=uri)
-		r = c.fetchone()
-		if r is None:
-			raise KeyError('library[%s]: no such entry' % uri)
-		else:
-			return Row()._make(r)
-		
-	def __setitem__(self,key,value):
-		c = self.db.cursor()
-		c.execute(INSERT, value)
-		self.db.commit()
-		
-	def __delitem__(self, uri):
-		self.db.cursor().execute(DELETE, (uri,))
-		self.db.commit()
 		
 	def add(self, files, force=False, **kwargs):
 		uris = []
@@ -144,64 +125,39 @@ class Library(collections.MutableMapping):
 			else:
 				verbose('Adding', u)
 				tags = tagger(u, normalize=True, update_callback=tagger.on_update)
-				print '{\n\t%s\n}' % ',\n\t'.join(["%r: %r" % item for item in sorted(tags.items())])
+				l = max(map(len,tags.keys())) + 2
 				tags['uri'] = u
 				if 'date' in tags:
 					tags['date'] = unicode(tags['date'])
-				rowtags = dict((k,tags.get(k,None)) for k in Columns())
-				print rowtags
-				NewRow = Row()(**rowtags)
-				self[NewRow.uri] = NewRow
-				self.db.commit()
+				tags['added'] = time.time()
+				rowtags = dict((k,tags.get(k,None)) for k in self.header)
+				self[rowtags['uri']] = rowtags
+				print '\n{'
+				for k in sorted(rowtags.keys()):
+					print '%s: %r' % (k.rjust(l), tags[k])
+				print '}'
+				self.dump(open(self.path,'wb'))
 
-	def members(self, column):
-		c = self.db.cursor()
-		if column in Columns():
-			sql = 'select distinct %s from %s' % (column, TABLE_VERSION)
-			debug(sql)
-			c.execute(sql)
-			for i in c:
-				yield i[0]
-		
-	def select(self, **kwargs):
-		c = self.db.cursor()
-		c.execute('select * from %s where ' + ','.join(['%s=?' for k in kwargs.keys()]), kwargs.values())
-		for i in c:
-			yield Row._make(i)
-			
 	def find(self, type, what):
-		c = self.db.cursor()
-		sql = 'select uri from %s where %s=?' % (TABLE_VERSION,type)
-		c.execute(sql, (what,))
-		return [i[0] for i in c]
-			
-	def update(self, uri, **kwargs):
-		c = self.db.cursor()
-		sql = 'update or abort %s set %s where uri=?' % (
-		  TABLE_VERSION,
-		  ','.join(['%s=?' % k for k in kwargs.keys()]),
-		)
-		if kwargs:
-			c.execute(sql, kwargs.values() + [uri,])
-			self.db.commit()
-			
-def upgrade(src=Versions[-1], dst=Versions[0], path=DEFAULT_PATH):
-	db = sqlite3.connect(path)
-	A = db.cursor()
-	B = db.cursor()
-	try:
-		B.execute('drop table %s' % dst)
-		B.execute(u"create table %s (%s) " % (dst, ", ".join(["%s %s" % i for i in Columns(dst,defs=True)])))
-		A.execute('select %s from %s' % (','.join(Columns(src)),src))
-		for row in A:
-			print row
-			old = Row(src)(*row)._asdict()
-			print old
-			B.execute('insert into %s (%s) values (%s)' % (dst, ','.join(old.keys()), ','.join('?'*len(old))), old.values())
-			print
-	finally:
-		A.close()
-		B.close()
-		db.commit()
+		return [i.uri for i in self.select(**{type:what})]
+#			
+#def upgrade(src=Versions[-1], dst=Versions[0], path=DEFAULT_PATH):
+#	db = sqlite3.connect(path)
+#	A = db.cursor()
+#	B = db.cursor()
+#	try:
+#		B.execute('drop table %s' % dst)
+#		B.execute(u"create table %s (%s) " % (dst, ", ".join(["%s %s" % i for i in Columns(dst,defs=True)])))
+#		A.execute('select %s from %s' % (','.join(Columns(src)),src))
+#		for row in A:
+#			print row
+#			old = Row(src)(*row)._asdict()
+#			print old
+#			B.execute('insert into %s (%s) values (%s)' % (dst, ','.join(old.keys()), ','.join('?'*len(old))), old.values())
+#			print
+#	finally:
+#		A.close()
+#		B.close()
+#		db.commit()
 
-__all__ = ['uri', 'Library', 'tag_reader', 'gsub', 'DEFAULT_PATH', 'upgrade']
+__all__ = ['uri', 'Library', 'tag_reader', 'gsub']

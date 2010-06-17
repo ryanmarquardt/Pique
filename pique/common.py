@@ -27,6 +27,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import collections
+import os.path
 import re
 import sys
 import threading
@@ -73,7 +74,7 @@ class Time(long):
 			return '%f' % (self / float(SECOND))
 			
 def uri(path):
-	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://' + path
+	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://' + os.path.abspath(path)
 
 class PObject(object):
 	def __init__(self):
@@ -86,3 +87,5 @@ class PObject(object):
 		for f,a,k in self.callbacks[signal]:
 			f(*(args+a), **k)
 		
+def hasattrs(obj, attrs):
+	return all(hasattr(obj,a) for a in attrs)
