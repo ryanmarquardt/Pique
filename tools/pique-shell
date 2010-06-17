@@ -40,9 +40,7 @@ if len(sys.argv) > 1:
 else:
 	import readline
 	import shlex
-	import os
-	tty = os.isatty(sys.stdin.fileno())
-	prompt = '(pique)%s: ' % host if tty else ''
+	prompt = '(pique)%s: ' % host if sys.stdin.isatty() else ''
 		
 	while True:
 		try:
@@ -54,4 +52,4 @@ else:
 			break
 		except KeyboardInterrupt:
 			break
-	if tty: print
+	if sys.stdin.isatty(): print
