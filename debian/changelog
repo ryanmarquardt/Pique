@@ -1,10 +1,19 @@
+pique (0.02.0) maverick; urgency=low
+
+  * Moved library backend from sqlite to a flat-file stored table.
+  * File objects provide their own isatty method.
+  * Renaming COPYRIGHT to COPYING, to conform to convention
+  * Builds happen in dist/
+
+ -- Ryan Marquardt <ryan@latti486>  Thu, 17 Jun 2010 17:17:20 -0700
+
 pique (0.01.1) maverick; urgency=low
 
   * Various regression fixes to basic functionality:
     --> pique-library init and add work as expected
     --> gui buttons and slider respond to input
 
- -- Ryan Marquardt <ryan.marquardt@gmail.com>  Mon, 15 Jun 2010 11:11:00 -0700
+ -- Ryan Marquardt <ryan@latti486>  Thu, 17 Jun 2010 17:03:46 -0700
 
 pique (0.01) maverick; urgency=low
 
