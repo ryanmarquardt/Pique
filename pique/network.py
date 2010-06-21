@@ -36,7 +36,7 @@ import traceback
 
 NetFormat = str
 
-class ConnectionThread(bgthread.BgThread):
+class ConnectionThread(bgthread.BgThread, PObject):
 	def main(self, commandmap, sock, address):
 		self.sock = sock
 		self.name = "Client %s:%i" % address
@@ -55,6 +55,7 @@ class ConnectionThread(bgthread.BgThread):
 				self.respond('No such command')
 				continue
 			try:
+				debug(func, args)
 				result = func(*args)
 			except PlayerError, e:
 				debug(e)
@@ -67,7 +68,7 @@ class ConnectionThread(bgthread.BgThread):
 			else:
 				debug('Responding with result', repr(result))
 				self.respond(None, result)
-		sock.close()
+		self.quit()
 		debug('disconnected')
 	
 	def recv_delimited(self):
@@ -87,18 +88,25 @@ class ConnectionThread(bgthread.BgThread):
 		
 	def respond(self, err=None, payload=None):
 		if payload is not None:
-			self.sock.send(NetFormat(payload) + '\n')
+			self.sock.send(NetFormat(payload))
 		if err is None:
 			self.sock.send('OK\n\n')
 		else:
 			self.sock.send('ERR: %s\n\n' % err)
+			
+	def quit(self):
+		self.sock.close()
+		self.emit('connection-closed', self)
 		
-class NetThread(bgthread.BgThread):
+class NetThread(bgthread.BgThread, PObject):
 	name = "NetworkThread"
 	
 	def __init__(self, *args, **kwargs):
 		bgthread.BgThread.__init__(self, *args, **kwargs)
 		self.dependencies = {'commandmap':self.on_set_commandmap}
+		self.commands = {
+			'ping': self.ping,
+		}
 		
 	def main(self, confitems):
 		config = dict(confitems)
@@ -108,14 +116,27 @@ class NetThread(bgthread.BgThread):
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
 		sock.bind((host, port))
 		sock.listen(5)
+		self.clients = set()
+		self.connect('new-connection', self.on_new_connection)
 		while True:
-			conn, addr = sock.accept()
-			c = ConnectionThread(self.commandmap, conn, addr)
-			c.start()
+			self.emit('new-connection', *sock.accept())
+			
+	def on_new_connection(self, conn, addr):
+		c = ConnectionThread(self.commandmap, conn, addr)
+		c.connect('connection-closed', self.client_closed)
+		self.clients.add(c)
+		c.start()
+		
+	def client_closed(self, client):
+		self.clients.discard(client)
+			
+	def ping(self):
+		return None
 			
 	def on_set_commandmap(self, commandmap):
 		self.commandmap = commandmap
 			
 	def quit(self):
-		pass
+		for c in list(self.clients):
+			c.quit()
 	
