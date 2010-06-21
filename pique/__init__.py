@@ -74,6 +74,8 @@ class PluginManager(collections.defaultdict):
 		except ConfigParser.NoSectionError:
 			items = ()
 		p = plugin(items)
+		self[path] = p
+		debug(self)
 		if hasattr(p, 'commands'):
 			for k in p.commands:
 				if k in self['commandmap']:
@@ -85,7 +87,6 @@ class PluginManager(collections.defaultdict):
 				#Automatically loads dependencies which haven't been loaded yet
 		#Store dependencies in reverse order
 		self.order.append(p)
-		self[path] = p
 		return p
 		
 	def start(self):
