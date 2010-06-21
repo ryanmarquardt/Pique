@@ -77,15 +77,21 @@ def uri(path):
 	return path if re.match('[a-zA-Z0-9]+://.*', path) else 'file://' + os.path.abspath(path)
 
 class PObject(object):
-	def __init__(self):
-		self.callbacks = collections.defaultdict(list)
-	
 	def connect(self, which, func, *args, **kwargs):
-		self.callbacks[which].append((func,args,kwargs))
+		try:
+			self.__callbacks
+		except AttributeError:
+			self.__callbacks = collections.defaultdict(list)
+		self.__callbacks[which].append((func,args,kwargs))
 		
 	def emit(self, signal, *args):
-		for f,a,k in self.callbacks[signal]:
-			f(*(args+a), **k)
+		try:
+			cbs = iter(self.__callbacks[signal])
+		except AttributeError:
+			pass
+		else:
+			for f,a,k in cbs:
+				f(*(args+a), **k)
 		
 def hasattrs(obj, attrs):
 	return all(hasattr(obj,a) for a in attrs)
