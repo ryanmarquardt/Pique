@@ -1,3 +1,4 @@
+#!/bin/sh
 export PY_FULLNAME=$(python setup.py --fullname)
 export PACKAGE_VERSION=$(grep ^$(python setup.py --name) debian/changelog | head -n 1 | cut -d\( -f2 | cut -d\) -f1)
 export PACKAGE_ARCH=$(dpkg-architecture -qDEB_BUILD_ARCH)
@@ -15,17 +16,17 @@ unpack () {
 
 debuild () { indir "${PY_FULLNAME}" $DEBUILD "$@" ; }
 
-deb-source () {
+debsource () {
 	unpack
 	indir "dist/${PY_FULLNAME}" debuild -S -sa
 }
 
-deb-source-diff () {
+debsourcediff () {
 	unpack
 	indir "dist/${PY_FULLNAME}" debuild -S -sd
 }
 
-deb-binary () {
+debbinary () {
 	unpack
 	indir "dist/${PY_FULLNAME}" debuild
 }
@@ -33,15 +34,15 @@ deb-binary () {
 deb () {
 	case $1 in
 		source)
-			deb-source
+			debsource
 			echo pique_${PACKAGE_VERSION}_source.deb
 			;;
 		source-diff)
-			deb-source-diff
+			debsourcediff
 			echo pique_${PACKAGE_VERSION}_source.deb
 			;;
 		binary)
-			deb-binary
+			debbinary
 			echo pique_${PACKAGE_VERSION}_${PACKAGE_ARCH}.deb
 			;;
 		*)
@@ -57,6 +58,17 @@ case $1 in
 		;;
 	deb)
 		deb $2
+		;;
+	run)
+		pack
+		unpack
+		export PYTHONPATH="$PWD/dist/${PY_FULLNAME}"
+		if [ -n "$3" ]; then
+			shift 2
+			indir "dist/${PY_FULLNAME}" "$@"
+		else
+			indir "dist/${PY_FULLNAME}" ./piqued
+		fi
 		;;
 	*)
 		echo "Unknown Command:" $1
