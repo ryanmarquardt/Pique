@@ -286,6 +286,10 @@ class Player(PObject):
 		self.taginject.props.tags = ','.join(['%s=%s' % (k,tags[k.replace('-','_')]) for k in rgtags])
 		self.refresh_xid()
 		
+	def scan_uri(self, uri):
+		tags = self.tagger(uri)
+		self.emit('new-tags', uri, tags)
+		
 def gsub(func):
 	main = gobject.MainLoop()
 	q = Queue.Queue()
@@ -307,7 +311,7 @@ def gsub(func):
 		else:
 			return r
 	return g
-	
+
 def convert(obj):
 	if hasattrs(obj, ['year','month','day']):
 		return datetime.datetime(obj.year,obj.month,obj.day)
@@ -339,10 +343,10 @@ class tag_reader(object):
 					continue
 				elif msg.type & gst.MESSAGE_EOS:
 					break
-				elif msg.type & gst.MESSAGE_ERROR:
-					raise Error(*msg.parse_error())
 				elif not normalize and msg.type & gst.MESSAGE_ASYNC_DONE:
 					break
+				elif msg.type & gst.MESSAGE_ERROR:
+					raise Error(*msg.parse_error())
 				elif msg.type & gst.MESSAGE_TAG:
 					taglist = msg.parse_tag()
 					for k in taglist.keys():

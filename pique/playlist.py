@@ -44,7 +44,6 @@ class Playlist(PObject):
 			'clear':	self.clear,
 			'repeat':	self.set_repeat,
 			'random':	self.set_random,
-			'list':		lambda:'\n'.join(self.entries),
 			'findadd':	self.findadd,
 		}
 		

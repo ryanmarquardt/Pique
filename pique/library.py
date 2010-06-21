@@ -31,7 +31,6 @@ import collections
 import os.path
 import time
 
-from player import tag_reader
 from common import *
 
 Versions = [
@@ -44,7 +43,22 @@ def reval(expr, **includes):
 	return eval(expr, {'__builtins__':[]}, includes)
 
 def Columns(version=TABLE_VERSION):
-	return filter(None, open(os.path.join(os.path.dirname(__file__),'table-def.conf')).read().split('\n'))
+	return [
+		'uri',
+		'title',
+		'artist',
+		'album',
+		'date',
+		'duration',
+		'track_number',
+		'disk_number',
+		'replaygain_track_peak',
+		'replaygain_track_gain',
+		'replaygain_reference_level',
+		'audio_codec',
+		'video_codec',
+		'added',
+	]
 
 class Table(collections.MutableMapping):
 	def __init__(self, columns):
@@ -68,7 +82,7 @@ class Table(collections.MutableMapping):
 		return len(self.elements)
 
 	def __iter__(self):
-		return iter(sorted(self.elements.values(),key=lambda x:(x.artist,x.album,x.track_number)))
+		return iter(sorted(self.elements.items(),key=lambda k,v:(v.artist,v.album,v.track_number)))
 
 	def select(self, **where):
 		items = where.items()
@@ -78,65 +92,62 @@ class Table(collections.MutableMapping):
 		return sorted(list(set(getattr(row, which) for row in self.elements.itervalues())))
 
 	def dump(self, f):
-		if not hasattr(f, 'fileno'):
-			f = open(f,'w')
 		f.write(repr(self.header) + '\n')
-		for row in self:
-			f.write(repr(row) + '\n')
+		for uri,row in self:
+			f.write('%r,%r\n' % (uri, repr(row)))
 
 	def load(self, f):
-		if not hasattr(f, 'readline'):
-			f = open(f,'r')
 		Table.__init__(self, reval(f.readline()))
 		for line in f:
-			row = reval(line, Row=self.Row)
-			self.elements[row.uri] = row
+			uri, row = reval(line, Row=self.Row)
+			self.elements[uri] = row
 
-class Library(Table):
+class Library(Table, PObject):
 	def __init__(self, items):
+		PObject.__init__(self)
 		self.path = os.path.expanduser(dict(items)['path'])
 		try:
-			self.load(self.path)
+			self.load(open(self.path,'r'))
 		except Exception, e:
 			verbose("Couldn't load library from disk; using empty database.")
 			verbose(e)
 			Table.__init__(self, Columns())
 		self.commands = {
 			'find':	self.find,
+			'list':	self.select_distinct,
 		}
+		self.dependencies = {
+			'pique.player.Player': self.on_set_player,
+		}
+		
+	def on_set_player(self, player):
+		self.connect('uri-added', player.scan_uri)
+		player.connect('new-tags', self.new_tags)
 
 	def clear(self):
 		Table.__init__(self, self.header)
 		self.dump(open(self.path,'w'))
 		verbose("Successfully initialized library at", repr(self.path))
 		
-	def add(self, files, force=False, **kwargs):
-		uris = []
-		for i in files:
+	def new_tags(self, uri, tags):
+		l = max(map(len,tags.keys())) + 2
+		tags['added'] = time.time()
+		rowtags = dict((k,tags.get(k,None)) for k in self.header)
+		self[uri] = rowtags
+		print '\n{'
+		for k in sorted(rowtags.keys()):
+			print '%s: %r' % (k.rjust(l), tags[k])
+		print '}'
+		self.dump(open(self.path,'wb'))
+		
+	def add(self, uris):
+		for i in uris:
 			if os.path.isdir(i):
 				for root,dirs,files in os.walk(i):
-					uris.extend([uri(os.path.join(root,f)) for f in files])
+					for f in files:
+						self.emit('uri-added', uri(os.path.join(root,f)))
 			else:
-				uris.append(uri(i))
-		tagger = tag_reader()
-		for u in uris:
-			if not force and unicode(u) in self:
-				verbose('Skipping', u)
-			else:
-				verbose('Adding', u)
-				tags = tagger(u, normalize=True, update_callback=tagger.on_update)
-				l = max(map(len,tags.keys())) + 2
-				tags['uri'] = u
-				if 'date' in tags:
-					tags['date'] = unicode(tags['date'])
-				tags['added'] = time.time()
-				rowtags = dict((k,tags.get(k,None)) for k in self.header)
-				self[rowtags['uri']] = rowtags
-				print '\n{'
-				for k in sorted(rowtags.keys()):
-					print '%s: %r' % (k.rjust(l), tags[k])
-				print '}'
-				self.dump(open(self.path,'wb'))
+				self.emit('uri-added', uri(i))
 
 	def find(self, type, what):
 		return [i.uri for i in self.select(**{type:what})]
@@ -160,4 +171,4 @@ class Library(Table):
 #		B.close()
 #		db.commit()
 
-__all__ = ['uri', 'Library', 'tag_reader', 'gsub']
+__all__ = ['uri', 'Library']
