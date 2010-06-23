@@ -2,5 +2,4 @@ include COPYRIGHT
 include TODO
 include debian/*
 include debian/*/*
-include pique/table-def.conf
 include pique/default.conf
