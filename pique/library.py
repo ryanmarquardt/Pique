@@ -29,6 +29,7 @@
 
 import collections
 import os.path
+import pickle
 import time
 
 from common import *
@@ -44,7 +45,6 @@ def reval(expr, **includes):
 
 def Columns(version=TABLE_VERSION):
 	return [
-		'uri',
 		'title',
 		'artist',
 		'album',
@@ -61,53 +61,52 @@ def Columns(version=TABLE_VERSION):
 	]
 
 class Table(collections.MutableMapping):
-	def __init__(self, columns):
-		self.header = columns
-		self.elements = {}
+	def __init__(self, columns, elements=None):
+		self.__header = columns
 		self.Row = collections.namedtuple('Row', columns)
-
+		self.__elements = {}
+		if elements is not None:
+			for k,v in elements.items():
+				self[k] = v
+		
 	def __getitem__(self, index):
-		return self.elements[index]
-
+		return self.__elements[index]
+		
 	def __setitem__(self, index, value):
 		if isinstance(value, collections.Mapping):
-			self.elements[index] = self.Row(**value)
+			self.__elements[index] = self.Row(**value)
 		elif isinstance(value, collections.Sequence):
-			self.elements[index] = self.Row(*value)
-
+			self.__elements[index] = self.Row(*value)
+		
 	def __delitem__(self, index):
-		del self.elements[index]
-
+		del self.__elements[index]
+		
 	def __len__(self):
-		return len(self.elements)
-
+		return len(self.__elements)
+		
 	def __iter__(self):
-		return iter(sorted(self.elements.items(),key=lambda k,v:(v.artist,v.album,v.track_number)))
-
+		return iter(sorted(self.__elements.items(),key=lambda k,v:(v.artist,v.album,v.track_number)))
+		
 	def select(self, **where):
 		items = where.items()
 		return [row for row in map(self.Row._make,self) if all(getattr(row,k)==v for k,v in items)]
-
+		
 	def select_distinct(self, which):
-		return sorted(list(set(getattr(row, which) for row in self.elements.itervalues())))
-
+		return sorted(list(set(getattr(row, which) for row in self.__elements.itervalues())))
+		
 	def dump(self, f):
-		f.write(repr(self.header) + '\n')
-		for uri,row in self:
-			f.write('%r,%r\n' % (uri, repr(row)))
-
+		pickle.dump((self.__header, [(k,tuple(v)) for k,v in self.__elements.iteritems()]), f)
+		
 	def load(self, f):
-		Table.__init__(self, reval(f.readline()))
-		for line in f:
-			uri, row = reval(line, Row=self.Row)
-			self.elements[uri] = row
+		columns, elements = pickle.load(f)
+		Table.__init__(self, columns, dict(elements))
 
 class Library(Table, PObject):
 	def __init__(self, items):
 		PObject.__init__(self)
 		self.path = os.path.expanduser(dict(items)['path'])
 		try:
-			self.load(open(self.path,'r'))
+			Table.load(self, open(self.path, 'rb'))
 		except Exception, e:
 			verbose("Couldn't load library from disk; using empty database.")
 			verbose(e)
@@ -115,6 +114,7 @@ class Library(Table, PObject):
 		self.commands = {
 			'find':	self.find,
 			'list':	self.select_distinct,
+			'import':	self.add,
 		}
 		self.dependencies = {
 			'pique.player.Player': self.on_set_player,
@@ -123,52 +123,31 @@ class Library(Table, PObject):
 	def on_set_player(self, player):
 		self.connect('uri-added', player.scan_uri)
 		player.connect('new-tags', self.new_tags)
-
+		
 	def clear(self):
 		Table.__init__(self, self.header)
-		self.dump(open(self.path,'w'))
+		Table.dump(self, open(self.path,'w'))
 		verbose("Successfully initialized library at", repr(self.path))
 		
 	def new_tags(self, uri, tags):
 		l = max(map(len,tags.keys())) + 2
 		tags['added'] = time.time()
-		rowtags = dict((k,tags.get(k,None)) for k in self.header)
+		rowtags = dict((k,tags.get(k,None)) for k in self.Row._fields)
 		self[uri] = rowtags
-		print '\n{'
-		for k in sorted(rowtags.keys()):
-			print '%s: %r' % (k.rjust(l), tags[k])
-		print '}'
-		self.dump(open(self.path,'wb'))
+		print self[uri]
+		#print '\n{'
+		#for k in sorted(rowtags.keys()):
+			#print '%s: %r' % (k.rjust(l), tags[k])
+		#print '}'
+		Table.dump(self, open(self.path,'wb'))
 		
-	def add(self, uris):
-		for i in uris:
-			if os.path.isdir(i):
-				for root,dirs,files in os.walk(i):
-					for f in files:
-						self.emit('uri-added', uri(os.path.join(root,f)))
-			else:
-				self.emit('uri-added', uri(i))
-
+	def add(self, path):
+		if os.path.isdir(path):
+			for root,dirs,files in os.walk(path):
+				for f in files:
+					self.emit('uri-added', uri(os.path.join(root,f)))
+		else:
+			self.emit('uri-added', uri(path))
+		
 	def find(self, type, what):
 		return [i.uri for i in self.select(**{type:what})]
-#			
-#def upgrade(src=Versions[-1], dst=Versions[0], path=DEFAULT_PATH):
-#	db = sqlite3.connect(path)
-#	A = db.cursor()
-#	B = db.cursor()
-#	try:
-#		B.execute('drop table %s' % dst)
-#		B.execute(u"create table %s (%s) " % (dst, ", ".join(["%s %s" % i for i in Columns(dst,defs=True)])))
-#		A.execute('select %s from %s' % (','.join(Columns(src)),src))
-#		for row in A:
-#			print row
-#			old = Row(src)(*row)._asdict()
-#			print old
-#			B.execute('insert into %s (%s) values (%s)' % (dst, ','.join(old.keys()), ','.join('?'*len(old))), old.values())
-#			print
-#	finally:
-#		A.close()
-#		B.close()
-#		db.commit()
-
-__all__ = ['uri', 'Library']

@@ -122,6 +122,8 @@ class Player(PObject):
 		self.state_change_done = threading.Event()
 		self.updatethread = PlayThread(lambda:self.emit('update', self.get_position(), self.get_duration()), 0.1)
 		
+		self.tagger = tag_reader()
+		
 		self.commands = {
 			'next':			self.next,
 			'play-pause':	self.play_pause,
