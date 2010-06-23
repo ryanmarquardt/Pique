@@ -1,13 +1,12 @@
 // General
 
 * Improve deb packaging: eliminate lintian errors and warnings
-  --> W: pique source: missing-debian-source-format
-      W: pique: extended-description-line-too-long
-      W: pique: binary-without-manpage usr/bin/pique-library
+  --> W: pique: binary-without-manpage usr/bin/pique-library
       W: pique: binary-without-manpage usr/bin/pique-lirc
       W: pique: binary-without-manpage usr/bin/pique-shell
       W: pique: binary-without-manpage usr/bin/piqued
  * write a .desktop file
+ * Task manager for importing songs asynchronously
 
 
 // Library
