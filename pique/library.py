@@ -103,7 +103,6 @@ class Table(collections.MutableMapping):
 
 class Library(Table, PObject):
 	def __init__(self, items):
-		PObject.__init__(self)
 		self.path = os.path.expanduser(dict(items)['path'])
 		try:
 			Table.load(self, open(self.path, 'rb'))

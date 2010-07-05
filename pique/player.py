@@ -88,7 +88,6 @@ StateMap = {
 
 class Player(PObject):
 	def __init__(self, confitems):
-		PObject.__init__(self)
 		self.dependencies = {
 			'pique.library.Library':self.on_set_library,
 			'pique.playlist.Playlist':self.on_set_playlist,

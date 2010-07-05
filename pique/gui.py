@@ -42,7 +42,6 @@ sys.argv = args
 class VideoBox(PObject, gtk.VBox):
 	def __init__(self):
 		gtk.VBox.__init__(self)
-		PObject.__init__(self)
 		
 		self.movie_window = gtk.DrawingArea()
 		self.movie_window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color(0,0,0))
