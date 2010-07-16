@@ -91,7 +91,8 @@ class Table(collections.MutableMapping):
 		items = where.items()
 		return [row for row in map(self.Row._make,self) if all(getattr(row,k)==v for k,v in items)]
 		
-	def select_distinct(self, which):
+	def select_distinct(self, which, *extra):
+		debug('*** SELECT_DISTINCT ***', which)
 		return sorted(list(set(getattr(row, which) for row in self.__elements.itervalues())))
 		
 	def dump(self, f):
@@ -120,8 +121,9 @@ class Library(Table, PObject):
 		}
 		
 	def on_set_player(self, player):
-		self.connect('uri-added', player.scan_uri)
-		player.connect('new-tags', self.new_tags)
+		self.player = player
+		#self.connect('uri-added', player.scan_uri)
+		#player.connect('new-tags', self.new_tags)
 		
 	def clear(self):
 		Table.__init__(self, self.header)
@@ -144,9 +146,11 @@ class Library(Table, PObject):
 		if os.path.isdir(path):
 			for root,dirs,files in os.walk(path):
 				for f in files:
-					self.emit('uri-added', uri(os.path.join(root,f)))
+					self.jobsmanager.submit(self.player.scan_uri, f)
+					#self.emit('uri-added', uri(os.path.join(root,f)))
 		else:
-			self.emit('uri-added', uri(path))
+			return self.jobsmanager.submit(self.player.scan_uri, f)
+			#self.emit('uri-added', uri(path))
 		
 	def find(self, type, what):
 		return [i.uri for i in self.select(**{type:what})]

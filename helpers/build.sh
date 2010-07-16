@@ -7,7 +7,7 @@ DEBUILD=$(which debuild)
 verbose () { echo BUILD.SH "$@" >&2 ; "$@" ; }
 indir () { ( cd "$1" ; shift ; "$@" ) ; }
 
-pack () { python setup.py sdist ; }
+pack () { rm MANIFEST; python setup.py sdist ; }
 
 unpack () {
 	pack

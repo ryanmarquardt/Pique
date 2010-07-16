@@ -38,6 +38,7 @@ import sys
 import gtk
 
 from common import *
+import jobs
 
 def importfrom(path):
 	mod, _, cls = path.rpartition('.')
