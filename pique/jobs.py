@@ -27,6 +27,7 @@
 
 from common import *
 import threading
+import traceback
 import Queue
 
 class JobsManager(PObject):
@@ -51,6 +52,7 @@ class JobsManager(PObject):
 				r = func(*args, **kwargs)
 			except Exception, e:
 				self.result[id] = None, e
+				print traceback.format_exc()
 			else:
 				self.result[id] = r, None
 			debug('Finished task', id)
