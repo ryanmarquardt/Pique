@@ -25,55 +25,68 @@
 #       (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 #       OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+from common import *
 import threading
 import Queue
 
-class JobsManager(object):
+class JobsManager(PObject):
 	def __init__(self, conf):
-		simultaneous = dict(conf).get('max_threads', 2)
-		self.jobs = {}
+		self.commands = {
+			'jobstatus': self.jobstatus,
+		}
+		self.highest = 0
+		count = dict(conf).get('max_threads', 2)
 		self.queue = Queue.Queue()
-		self.consumers = []
-		for i in range(simultaneous):
-			self.consumers.append(threading.Thread(target=JobConsumer, args=(self.queue,)))
-		
-	def submit(self, func, *args, **kwargs):
-		id = max(self.jobs.keys())+1
-		f = lambda:func(*args,**kwargs)
-		self.jobs[id] = Job(id, f)
-		
-def JobConsumer(queue):
-	while True:
-		try:
-			job = queue.get(timeout=1)
-			job.run()
-			queue.task_done()
-		except Queue.Empty:
-			pass
-		
-class Job(object):
-	def __init__(self, id, callback):
-		self.id = id
-		self.callback = callback
-		self.result = None,None
-		self.status = 'pending'
-		self.done_event = threading.Event()
-		
-	def run(self):
-		job.status = 'running'
-		self.done_event.clear()
-		try:
-			r = func(*args, **kwargs)
-		except Exception, e:
-			self.result = None, e
-		else:
-			self.result = r, None
-		job.status = 'finished'
-		self.done_event.set()
+		self.result = {}
+		for i in range(count):
+			t = threading.Thread(target=self.consume)
+			t.daemon = True
+			t.start()
 	
-	def join(self):
-		self.done_event.wait()
-		if self.result[1] is not None:
-			raise self.result[1]
+	def consume(self):
+		while True:
+			id, func, args, kwargs = self.queue.get()
+			debug('Running task', id)
+			try:
+				r = func(*args, **kwargs)
+			except Exception, e:
+				self.result[id] = None, e
+			else:
+				self.result[id] = r, None
+			debug('Finished task', id)
+			self.queue.task_done()
+	
+	def submit(self, func, *args, **kwargs):
+		self.highest += 1
+		id = self.highest
+		self.queue.put((id, func, args, kwargs))
+		return id
+		
+	def jobstatus(self, id):
+		id = int(id)
+		if id in self.result:
+			if self.result[id][1] is None:
+				return 'done'
+			else:
+				return 'error'
 		else:
-			return self.result[0]
+			return 'pending'
+		
+	def join(self):
+		self.queue.join()
+
+if __name__=='__main__':
+	def long_running_task(input):
+		t = 1
+		for a in range(input):
+			t = (t * a) or 1
+			t = t & 0xffffffffffffffff
+		return t
+	
+	JM = JobsManager(())
+	
+	import random
+	ids = [JM.submit(long_running_task, random.randint(2**15,2**16)) for i in range(50)]
+	JM.join()
+	for id in ids:
+		print JM.result[id]
