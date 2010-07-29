@@ -281,7 +281,7 @@ class Player(PObject):
 			
 	def load(self, uri):
 		debug('load', uri)
-		tags = self.lib[uri]._asdict()
+		tags = self.lib[uri]
 		self.player.set_property('uri', uri)
 		rgtags = 'replaygain-reference-level','replaygain-track-gain','replaygain-track-peak'
 		self.taginject.props.tags = ','.join(['%s=%s' % (k,tags[k.replace('-','_')]) for k in rgtags])
@@ -351,7 +351,7 @@ class tag_reader(object):
 				elif msg.type & gst.MESSAGE_TAG:
 					taglist = msg.parse_tag()
 					for k in taglist.keys():
-						k,v = k.replace('-','_'),convert(taglist[k])				
+						k,v = k.replace('-','_'),convert(taglist[k])
 						tags[k] = v
 			tags['duration'] = self.playbin.query_duration(gst.FORMAT_TIME, None)[0]
 		except Exception, e:
