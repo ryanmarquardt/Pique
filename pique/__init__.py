@@ -76,7 +76,6 @@ class PluginManager(collections.defaultdict):
 			items = ()
 		p = plugin(items)
 		self[path] = p
-		debug(self)
 		if hasattr(p, 'commands'):
 			for k in p.commands:
 				if k in self['commandmap']:
