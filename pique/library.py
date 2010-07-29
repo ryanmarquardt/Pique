@@ -27,10 +27,9 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import collections
 import os.path
-import pickle
 import time
+import shelve
 
 from common import *
 
@@ -60,97 +59,64 @@ def Columns(version=TABLE_VERSION):
 		'added',
 	]
 
-class Table(collections.MutableMapping):
-	def __init__(self, columns, elements=None):
-		self.__header = columns
-		self.Row = collections.namedtuple('Row', columns)
-		self.__elements = {}
-		if elements is not None:
-			for k,v in elements.items():
-				self[k] = v
-		
-	def __getitem__(self, index):
-		return self.__elements[index]
-		
-	def __setitem__(self, index, value):
-		if isinstance(value, collections.Mapping):
-			self.__elements[index] = self.Row(**value)
-		elif isinstance(value, collections.Sequence):
-			self.__elements[index] = self.Row(*value)
-		
-	def __delitem__(self, index):
-		del self.__elements[index]
-		
-	def __len__(self):
-		return len(self.__elements)
-		
-	def __iter__(self):
-		return iter(sorted(self.__elements.items(),key=lambda k,v:(v.artist,v.album,v.track_number)))
-		
-	def select(self, **where):
-		items = where.items()
-		return [row for row in map(self.Row._make,self) if all(getattr(row,k)==v for k,v in items)]
-		
-	def select_distinct(self, which, *extra):
-		debug('*** SELECT_DISTINCT ***', which)
-		return sorted(list(set(getattr(row, which) for row in self.__elements.itervalues())))
-		
-	def dump(self, f):
-		pickle.dump((self.__header, [(k,tuple(v)) for k,v in self.__elements.iteritems()]), f)
-		
-	def load(self, f):
-		columns, elements = pickle.load(f)
-		Table.__init__(self, columns, dict(elements))
+	#def __iter__(self):
+		#for i in sorted(self.__elements.items(),key=lambda i:(i[1].artist,i[1].album,i[1].track_number)):
+			#yield i[0]
 
-class Library(Table, PObject):
+def makedirs(path):
+	parent = os.path.dirname(path)
+	if not os.path.exists(parent):
+		makedirs(parent)
+		os.mkdir(parent)
+
+class Library(PObject):
 	def __init__(self, items):
 		self.path = os.path.expanduser(dict(items)['path'])
-		try:
-			Table.load(self, open(self.path, 'rb'))
-		except Exception, e:
-			verbose("Couldn't load library from disk; using empty database.")
-			verbose(e)
-			Table.__init__(self, Columns())
+		makedirs(self.path)
+		self.db = shelve.open(self.path, 'c')
 		self.commands = {
 			'find':	self.find,
 			'list':	self.select_distinct,
-			'import':	self.add,
+			'import':	self.Import,
 		}
 		self.dependencies = {
 			'pique.player.Player': self.on_set_player,
+			'pique.jobs.JobsManager': self.on_set_jobsmanager,
 		}
+		
+	def __getitem__(self, uri):
+		return dict(zip(Columns(), self.db[uri]))
+		
+	def on_set_jobsmanager(self, jobsmanager):
+		self.jobsmanager = jobsmanager
 		
 	def on_set_player(self, player):
 		self.player = player
-		#self.connect('uri-added', player.scan_uri)
-		#player.connect('new-tags', self.new_tags)
-		
-	def clear(self):
-		Table.__init__(self, self.header)
-		Table.dump(self, open(self.path,'w'))
-		verbose("Successfully initialized library at", repr(self.path))
+		self.player.connect('new-tags', self.new_tags)
 		
 	def new_tags(self, uri, tags):
-		l = max(map(len,tags.keys())) + 2
 		tags['added'] = time.time()
-		rowtags = dict((k,tags.get(k,None)) for k in self.Row._fields)
-		self[uri] = rowtags
-		print self[uri]
-		#print '\n{'
-		#for k in sorted(rowtags.keys()):
-			#print '%s: %r' % (k.rjust(l), tags[k])
-		#print '}'
-		Table.dump(self, open(self.path,'wb'))
+		rowtags = [tags.get(k,None) for k in Columns()]
+		debug(rowtags)
+		self.db[uri] = rowtags
+		self.db.sync()
+		debug('library has been synced')
 		
-	def add(self, path):
+	def Import(self, path):
 		if os.path.isdir(path):
 			for root,dirs,files in os.walk(path):
 				for f in files:
 					self.jobsmanager.submit(self.player.scan_uri, f)
-					#self.emit('uri-added', uri(os.path.join(root,f)))
 		else:
-			return self.jobsmanager.submit(self.player.scan_uri, f)
-			#self.emit('uri-added', uri(path))
+			return self.jobsmanager.submit(self.player.scan_uri, path)
 		
 	def find(self, type, what):
 		return [i.uri for i in self.select(**{type:what})]
+	
+	def select_distinct(self, *args):
+		if args:
+			which = args[0]
+			extra = args[1:]
+			return sorted(list(set(getattr(row, which) for row in self.db.itervalues())))
+		else:
+			return sorted(self.db.keys())
