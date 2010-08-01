@@ -35,7 +35,6 @@ class RawClient(object):
 	def __init__(self, host, port=NETPORT):
 		self.addr = (host, port)
 		self.credentials = None
-		self.leftover = ''
 		
 	def connect(self):
 		pass
@@ -52,13 +51,10 @@ class RawClient(object):
 			packet = '\n'.join(args) + '\n\n'
 			while packet:
 				packet = packet[sock.send(packet):]
-			while '\n\n' not in self.leftover:
+			buf = sock.recv(BUFSIZE)
+			while buf:
+				result += buf
 				buf = sock.recv(BUFSIZE)
-				if buf:
-					self.leftover += buf
-				else:
-					raise Exception('Connection Refused')
-			result, _, self.leftover = self.leftover.partition('\n\n')
 			return result
 		finally:
 			sock.close()
