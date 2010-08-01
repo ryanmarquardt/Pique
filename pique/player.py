@@ -91,6 +91,7 @@ class Player(PObject):
 		self.dependencies = {
 			'pique.library.Library':self.on_set_library,
 			'pique.playlist.Playlist':self.on_set_playlist,
+			'pique.jobs.JobsManager':self.on_set_jobsmanager,
 		}
 		config = dict(confitems)
 		self.state_change_lock = threading.Lock()
@@ -113,6 +114,7 @@ class Player(PObject):
 		self.bus.connect('message::async-done', self.on_async_done)
 		self.bus.connect('message::state-changed', self.on_state_changed)
 		self.bus.connect('message::error', self.on_error)
+		self.bus.connect('message::eos', PObject.emit, self, 'eos')
 		self.connect('error', self.on_private_error)
 		
 		self.last_update = ()
@@ -147,6 +149,9 @@ class Player(PObject):
 		self.playlist = playlist
 		self.playlist.connect('changed', self.on_playlist_changed)
 		self.playlist.connect('new-uri-available', self.on_playlist_new_uri)
+			
+	def on_set_jobsmanager(self, jobsmanager):
+		self.jobsmanager = jobsmanager
 			
 	def on_playlist_changed(self):
 		debug('playlist changed')
@@ -290,6 +295,7 @@ class Player(PObject):
 	def scan_uri(self, uri):
 		tags = self.tagger(uri, normalize=False)
 		self.emit('new-tags', uri, tags)
+		#self.jobsmanager.submit(self.normalize_uri, uri)
 		
 	def normalize_uri(self, uri):
 		tags = self.tagger(uri, normalize=True)

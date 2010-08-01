@@ -104,12 +104,12 @@ class Library(PObject):
 		
 	def Import(self, path):
 		r = self.player.scan_uri(path)
-		self.jobsmanager.submit(self.player.normalize_uri, path)
+		#self.jobsmanager.submit(self.player.normalize_uri, path)
 		return r
 		
 	def find(self, type, what):
 		idx = Columns().index(type)
-		return [k for (k,v) in self.db.iteritems() if v[idx] == what]
+		return sorted([k for (k,v) in self.db.iteritems() if v[idx] == what])
 	
 	def select_distinct(self, *args):
 		if args:
