@@ -103,20 +103,19 @@ class Library(PObject):
 		debug('library has been synced')
 		
 	def Import(self, path):
-		if os.path.isdir(path):
-			for root,dirs,files in os.walk(path):
-				for f in files:
-					self.jobsmanager.submit(self.player.scan_uri, f)
-		else:
-			return self.jobsmanager.submit(self.player.scan_uri, path)
+		r = self.player.scan_uri(path)
+		self.jobsmanager.submit(self.player.normalize_uri, path)
+		return r
 		
 	def find(self, type, what):
-		return [i.uri for i in self.select(**{type:what})]
+		idx = Columns().index(type)
+		return [k for (k,v) in self.db.iteritems() if v[idx] == what]
 	
 	def select_distinct(self, *args):
 		if args:
 			which = args[0]
 			extra = args[1:]
-			return sorted(list(set(getattr(row, which) for row in self.db.itervalues())))
+			idx = Columns().index(which)
+			return sorted(list(set(row[idx] for row in self.db.itervalues())))
 		else:
 			return sorted(self.db.keys())

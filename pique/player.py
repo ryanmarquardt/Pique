@@ -288,7 +288,11 @@ class Player(PObject):
 		self.refresh_xid()
 		
 	def scan_uri(self, uri):
-		tags = self.tagger(uri)
+		tags = self.tagger(uri, normalize=False)
+		self.emit('new-tags', uri, tags)
+		
+	def normalize_uri(self, uri):
+		tags = self.tagger(uri, normalize=True)
 		self.emit('new-tags', uri, tags)
 		
 def gsub(func):
