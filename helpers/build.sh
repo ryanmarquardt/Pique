@@ -63,8 +63,8 @@ case $1 in
 		pack
 		unpack
 		export PYTHONPATH="$PWD/dist/${PY_FULLNAME}"
-		if [ -n "$3" ]; then
-			shift 2
+		if [ -n "$2" ]; then
+			shift 1
 			indir "dist/${PY_FULLNAME}" "$@"
 		else
 			indir "dist/${PY_FULLNAME}" ./piqued
