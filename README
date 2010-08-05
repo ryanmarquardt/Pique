@@ -3,9 +3,9 @@ and play video files. Some features included in pique's plugin
 architecture include full command capabilities via a network interface,
 gstreamer-based playback, and simple extensibility.
 
-This project is hosted at github. The latest version can be checked
+This project is hosted at gitorious. The latest version can be checked
 out by installing git and issuing the command:
 	
-	git clone git://github.com/orbnauticus/Pique.git
+	git clone git://gitorious.org/pique/pique.git
 
 
