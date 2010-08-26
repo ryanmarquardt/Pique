@@ -1,7 +1,7 @@
 #!/bin/sh
 export PY_FULLNAME=$(python setup.py --fullname)
 export PACKAGE_NAME=$(python setup.py --name)
-export PACKAGE_VERSION=$(grep ^${PACKAGE_NAME} debian/changelog | head -n 1 | cut -d\( -f2 | cut -d\) -f1)
+export PACKAGE_VERSION=$(python setup.py --version)
 export PACKAGE_FULLNAME=${PACKAGE_NAME}_${PACKAGE_VERSION}
 export PACKAGE_ARCH=$(dpkg-architecture -qDEB_BUILD_ARCH)
 DEBUILD=$(which debuild)
