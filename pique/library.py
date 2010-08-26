@@ -78,6 +78,8 @@ class Library(PObject):
 			'find':	self.find,
 			'list':	self.select_distinct,
 			'import':	self.Import,
+			'info':	self.info,
+			'edit':	self.edit,
 		}
 		self.dependencies = {
 			'pique.player.Player': self.on_set_player,
@@ -110,6 +112,16 @@ class Library(PObject):
 	def find(self, type, what):
 		idx = Columns().index(type)
 		return sorted([k for (k,v) in self.db.iteritems() if v[idx] == what])
+		
+	def edit(self, uri, key, value=None):
+		idx = Columns().index(key)
+		entry = self.db[uri]
+		entry[idx] = value
+		self.db[uri] = entry
+		return entry
+		
+	def info(self, uri):
+		return dict(zip(Columns(), self.db[uri]))
 	
 	def select_distinct(self, *args):
 		if args:
