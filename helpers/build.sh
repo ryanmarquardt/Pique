@@ -1,55 +1,48 @@
 #!/bin/sh
 export PY_FULLNAME=$(python setup.py --fullname)
-export PACKAGE_VERSION=$(grep ^$(python setup.py --name) debian/changelog | head -n 1 | cut -d\( -f2 | cut -d\) -f1)
+export PACKAGE_NAME=$(python setup.py --name)
+export PACKAGE_VERSION=$(grep ^${PACKAGE_NAME} debian/changelog | head -n 1 | cut -d\( -f2 | cut -d\) -f1)
+export PACKAGE_FULLNAME=${PACKAGE_NAME}_${PACKAGE_VERSION}
 export PACKAGE_ARCH=$(dpkg-architecture -qDEB_BUILD_ARCH)
 DEBUILD=$(which debuild)
+SUBSHELL=${SHELL:-/bin/bash}
+RM=$(which rm)
+PYTHON=$(which python)
+TAR=$(which tar)
+DPUT=$(which dput)
 
 verbose () { echo BUILD.SH "$@" >&2 ; "$@" ; }
 indir () { ( cd "$1" ; shift ; "$@" ) ; }
 
-pack () { rm MANIFEST; python setup.py sdist ; }
+pack () { "$RM" MANIFEST; "$PYTHON" setup.py sdist ; }
 
 unpack () {
 	pack
-	indir dist verbose tar -xf "${PY_FULLNAME}.tar.gz"
+	indir dist verbose "$TAR" -xf "${PY_FULLNAME}.tar.gz"
 }
 
-debuild () { indir "${PY_FULLNAME}" $DEBUILD "$@" ; }
-
-debsource () {
-	unpack
-	indir "dist/${PY_FULLNAME}" debuild -S -sa
-}
-
-debsourcediff () {
-	unpack
-	indir "dist/${PY_FULLNAME}" debuild -S -sd
-}
-
-debbinary () {
-	unpack
-	indir "dist/${PY_FULLNAME}" debuild
-}
+debuild () { unpack; indir "dist/${PY_FULLNAME}" "$DEBUILD" "$@" ; }
 
 deb () {
+    ARCH=source
 	case $1 in
 		source)
-			debsource
-			echo pique_${PACKAGE_VERSION}_source.deb
+			debuild -S -sa
 			;;
-		source-diff)
-			debsourcediff
-			echo pique_${PACKAGE_VERSION}_source.deb
+		source-diff|diff)
+			debuild -S -sd
 			;;
 		binary)
-			debbinary
-			echo pique_${PACKAGE_VERSION}_${PACKAGE_ARCH}.deb
+			debuild
+            ARCH=${PACKAGE_ARCH}
 			;;
 		*)
 			echo "Unknown architecture:" $1
+            echo "Try one of:" source source-diff binary
 			exit 2
 			;;
 	esac
+    echo ${PACKAGE_FULLNAME}_${ARCH}.deb
 }
 
 case $1 in
@@ -67,11 +60,22 @@ case $1 in
 			shift 1
 			indir "dist/${PY_FULLNAME}" "$@"
 		else
-			indir "dist/${PY_FULLNAME}" ./piqued
+            echo "Starting subshell with proper environment..."
+			indir "dist/${PY_FULLNAME}" "$SUBSHELL"
 		fi
 		;;
+    ppa-upload|ppa)
+        deb source-diff
+        if [ -n "$2" ]; then
+            PPA="$2"
+        elif [ -z "$PPA" ] ; then
+            read -p "Which ppa would you like to upload to?" PPA
+        fi
+        "$DPUT" "$PPA" "dist/${PACKAGE_FULLNAME}_source.changes"
+        ;;
 	*)
 		echo "Unknown Command:" $1
+        echo "Try one of:" source deb run
 		exit 1
 		;;
 esac
