@@ -114,7 +114,7 @@ class Player(PObject):
 		self.bus.connect('message::async-done', self.on_async_done)
 		self.bus.connect('message::state-changed', self.on_state_changed)
 		self.bus.connect('message::error', self.on_error)
-		self.bus.connect('message::eos', PObject.emit, self, 'eos')
+		self.bus.connect('message::eos', self.on_eos)
 		self.connect('error', self.on_private_error)
 		
 		self.last_update = ()
@@ -178,6 +178,9 @@ class Player(PObject):
 			
 	def on_error(self, bus, message):
 		self.emit('error', message.parse_error())
+		
+	def on_eos(self, bus, message):
+		self.emit('eos')
 		
 	def set_state(self, state):
 		with self.state_change_pending:
