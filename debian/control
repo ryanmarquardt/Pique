@@ -11,7 +11,7 @@ Homepage: http://github.com/orbnauticus/Pique
 
 Package: pique
 Architecture: any
-Depends: ${misc:Depends}, ${python:Depends}, python-gst0.10, python-gtk2
+Depends: ${misc:Depends}, ${python:Depends}, python-gst0.10, python-gtk2, gstreamer0.10-plugins-good
 Description: networked media player
  Pique is a media center program inspired by mpd but also able to manage
  and play video files. Some features included in pique's plugin
