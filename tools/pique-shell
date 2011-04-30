@@ -80,7 +80,11 @@ source = (args,) if args else shell('(pique)%s: ' % options.host)
 for argv in source:
 	if argv:
 		print 'Calling', ' '.join(argv)
-		handle, result = serv.call_quick(*argv)
-		printformat(result)
+		try:
+			handle, result = serv.call_quick(*argv)
+		except EOFError:
+			break
+		else:
+			printformat(result)
 
 print 'Disconnecting'

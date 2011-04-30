@@ -56,6 +56,9 @@ class NetThread(rpc.ThreadingServer, bgthread.BgThread, PObject):
 	def on_call(self, name, *args, **kwargs):
 		if name == 'ping':
 			return None
+		elif name == 'quit':
+			rpc.ThreadingServer.shutdown(self)
+			self.commandmap['quit']()
 		elif name == 'help':
 			return self.commandmap[args[0]].__doc__
 		else:
