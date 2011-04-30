@@ -1,3 +1,9 @@
+pique (0.02.1) maverick; urgency=low
+
+  * Added new RPC code
+
+ -- Ryan Marquardt (orbnauticus) <ryan.marquardt@gmail.com>  Sat, 30 Apr 2011 19:14:26 +0900
+
 pique (0.02.0) maverick; urgency=low
 
   * Moved library backend from sqlite to a flat-file stored table.
