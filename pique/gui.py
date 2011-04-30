@@ -185,8 +185,8 @@ class GUI(gtk.Window):
 			'fullscreen':	self.toggle_fullscreen,
 			'menu':			self.toggle_menu,
 			'controls':		self.toggle_controls,
-			'show-menu':	self.show_menu,
-			'hide-menu':	self.hide_menu,
+			'show_menu':	self.show_menu,
+			'hide_menu':	self.hide_menu,
 		}
 	
 	def on_set_player(self, player):
@@ -238,6 +238,9 @@ class GUI(gtk.Window):
 		self.show_controls()
 		
 	def toggle_fullscreen(self):
+		'''fullscreen() -> None
+
+Switch between windowed and fullscreen views.'''
 		if self.__fullscreen:
 			self.unfullscreen()
 		else:
@@ -250,18 +253,30 @@ class GUI(gtk.Window):
 		self.videobox.buttons.hide()
 		
 	def toggle_controls(self):
+		'''controls() -> None
+
+Toggle whether control bar is shown.'''
 		if self.videobox.buttons.get_property('visible'):
 			self.hide_controls()
 		else:
 			self.show_controls()
 		
 	def show_menu(self):
+		'''show_menu() -> None
+
+Show the menu.'''
 		self.videobox.menu.show()
 		
 	def hide_menu(self):
+		'''hide_menu() -> None
+
+Hide the menu.'''
 		self.videobox.menu.hide()
 		
 	def toggle_menu(self):
+		'''menu() -> None
+
+Toggle whether menu is shown.'''
 		if self.menu.get_property('visible'):
 			self.hide_menu()
 		else:
