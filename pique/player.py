@@ -132,10 +132,8 @@ class Player(PObject):
 			'pause':		self.pause,
 			'stop':			self.stop,
 			'previous':		self.previous,
-			'seek':			lambda pos:self.seek(pos*SECOND, False),
-			'jump':			lambda pos:self.seek(pos*SECOND, True),
-			'beginning':	lambda:self.seek(0, True),
-			'end':			lambda:self.seek(self.player.get_duration(), True),
+			'seek':			self.seek,
+			'set-volume':	self.set_volume,
 			'volume-up':	lambda:self.set_volume(.05, False),
 			'volume-down':	lambda:self.set_volume(-.05, False),
 			'mute':			lambda:self.set_volume(0, True),
@@ -218,6 +216,12 @@ class Player(PObject):
 			self.video_sink.set_xwindow_id(self._window.window.xid)
 			
 	def seek(self, new, absolute=True):
+		'''seek(new_position, absolute=True) -> None
+
+Move playback to a different point. If absolute is True, new_position is the
+location to continue playback. If absolute is False, new_position is the
+number of seconds forward or backward to move.'''
+		new *= SECOND
 		if not absolute:
 			new = max(0, new + self.get_position(percent=percent))
 		debug('seek', new)
@@ -230,16 +234,25 @@ class Player(PObject):
 		return self.player.get_state()[1] == gst.STATE_PLAYING
 			
 	def play_pause(self):
+		'''play_pause() -> None
+
+Toggle player state between playing and paused.'''
 		if self.isplaying():
 			self.pause()
 		else:
 			self.play()
 		
 	def play(self):
+		'''play() -> None
+
+Start playback.'''
 		debug('play')
 		self.set_state('playing')
 		
 	def pause(self):
+		'''pause() -> None
+
+Pause playback.'''
 		debug('pause')
 		self.set_state('paused')
 		
@@ -279,6 +292,9 @@ class Player(PObject):
 		self.play()
 		
 	def next(self):
+		'''next() -> None
+
+Move playback to the next item in the playlist.'''
 		debug('next')
 		self.stop()
 		try:
