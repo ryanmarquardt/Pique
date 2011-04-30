@@ -61,7 +61,10 @@ case $1 in
 			indir "dist/${PY_FULLNAME}" "$@"
 		else
             echo "Starting subshell with proper environment..."
-			indir "dist/${PY_FULLNAME}" "$SUBSHELL"
+			indir "dist/${PY_FULLNAME}" "$COLORTERM" &
+			echo "Starting server..."
+			indir "dist/${PY_FULLNAME}" ./piqued
+			fg
 		fi
 		;;
     ppa-upload|ppa)
