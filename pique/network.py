@@ -28,115 +28,57 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from common import *
 from player import Error as PlayerError
+import rpc
 import bgthread
 
 import collections
 import socket
 import traceback
 
+import SocketServer
+
 NetFormat = str
 
-class ConnectionThread(bgthread.BgThread, PObject):
-	def main(self, commandmap, sock, address):
-		self.sock = sock
-		self.name = "Client %s:%i" % address
-		debug('connected')
-		for cmd, args in self.recv_delimited():
-			debug('called', cmd, args)
-			if cmd == 'close':
-				break
-			elif cmd == 'quit':
-				self.respond(None)
-				commandmap[cmd](*args) #quit()
-				break
-			try:
-				func = commandmap[cmd]
-			except KeyError:
-				self.respond('No such command')
-				continue
-			try:
-				debug(func, args)
-				result = func(*args)
-			except PlayerError, e:
-				debug(e)
-				self.respond(e)
-			except:
-				tb = traceback.format_exc()
-				debug('Error:', tb)
-				self.respond('Unknown Error', tb)
-				continue
-			else:
-				debug('Responding with result', repr(result))
-				self.respond(None, result)
-		self.quit()
-		debug('disconnected')
-	
-	def recv_delimited(self):
-		delimiter = '\n\n'
-		buffer = self.sock.recv(BUFSIZE)
-		buff2 = ''
-		while buffer:
-			buff2 += buffer
-			while delimiter in buff2:
-				cmd, _, buff2 = buff2.partition(delimiter)
-				cmd = cmd.split('\n')
-				yield cmd[0], cmd[1:]
-			try:
-				buffer = self.sock.recv(BUFSIZE)
-			except socket.error:
-				buffer = ''
+class RequestHandler(rpc.RequestHandler):
+	def handle(self):
+		self.server.clients.add(self)
+		rpc.RequestHandler.handle(self)
+		self.server.clients.remove(self)
 		
-	def respond(self, err=None, payload=None):
-		if payload is not None:
-			self.sock.send(NetFormat(payload))
-		if err is None:
-			self.sock.send('OK\n\n')
-		else:
-			self.sock.send('ERR: %s\n\n' % err)
-			
 	def quit(self):
-		self.sock.close()
-		self.emit('connection-closed', self)
-		
-class NetThread(bgthread.BgThread, PObject):
+		self.wfile.write('\n')
+		self.rfile.close()
+
+class NetThread(rpc.ThreadingServer, bgthread.BgThread, PObject):
 	name = "NetworkThread"
 	
 	def __init__(self, *args, **kwargs):
 		bgthread.BgThread.__init__(self, *args, **kwargs)
 		self.dependencies = {'commandmap':self.on_set_commandmap}
-		self.commands = {
-			'ping': self.ping,
-		}
+		self.clients = set()
+		self.commands = {}
 		
 	def main(self, confitems):
 		config = dict(confitems)
 		host = config.get('listen-host', 'localhost')
 		port = config.get('listen-port', 8145)
-		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
-		sock.bind((host, port))
-		sock.listen(5)
-		self.clients = set()
-		self.connect('new-connection', self.on_new_connection)
-		while True:
-			self.emit('new-connection', *sock.accept())
-			
-	def on_new_connection(self, conn, addr):
-		c = ConnectionThread(self.commandmap, conn, addr)
-		c.connect('connection-closed', self.client_closed)
-		self.clients.add(c)
-		c.start()
+		rpc.ThreadingServer.__init__(self, (host, port))
+		self.serve_forever()
 		
-	def client_closed(self, client):
-		self.clients.discard(client)
-			
-	def ping(self):
-		return None
+	def on_call(self, name, *args, **kwargs):
+		if name == 'ping':
+			return None
+		elif name == 'help':
+			return self.commandmap[name].__doc__
+		else:
+			debug(self.commandmap)
+			debug(name, args, kwargs)
+			func = self.commandmap[name]
+			return func(*args, **kwargs)
 			
 	def on_set_commandmap(self, commandmap):
 		self.commandmap = commandmap
 			
 	def quit(self):
-		for c in list(self.clients):
-			c.quit()
-	
+		for client in self.clients:
+			client.quit()

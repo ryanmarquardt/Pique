@@ -21,26 +21,27 @@ except ImportError:
 
 impl = xml.dom.getDOMImplementation()
 
+type_map = {
+	bool:'bool', int:'int', long:'long', float:'float',
+	complex:'complex',
+	str:'str', unicode:'unicode', bytearray:'bytearray',
+	list:'list', tuple:'tuple',
+	dict:'dict', set:'set', frozenset:'frozenset',
+	'bool':bool, 'int':int, 'long':long, 'float':float,
+	'complex':complex,
+	'str':str, 'unicode':unicode, 'bytearray':bytearray,
+	'list':list, 'tuple':tuple,
+	'dict':dict, 'set':set, 'frozenset':frozenset,
+}
+
 def get_type(obj):
-	for t in int,long,bool,float,complex,str,unicode,bytearray,list,tuple,dict,set:
-		if isinstance(obj,t):
+	for t in obj.__class__.mro():
+		if t in type_map:
 			break
-	return {
-		bool:'bool', int:'int', long:'long', float:'float',
-		complex:'complex',
-		str:'str', unicode:'unicode', bytearray:'bytearray',
-		list:'list', tuple:'tuple',
-		dict:'dict', set:'set', frozenset:'frozenset',
-	}[t]
+	return type_map[t]
 	
 def type_from_name(name):
-	return {
-		'bool':bool, 'int':int, 'long':long, 'float':float,
-		'complex':complex,
-		'str':str, 'unicode':unicode, 'bytearray':bytearray,
-		'list':list, 'tuple':tuple,
-		'dict':dict, 'set':set, 'frozenset':frozenset,
-	}[name]
+	return type_map[name]
 	
 class func_def(object):
 	def __init__(self, name, *args, **kwargs):
@@ -49,10 +50,11 @@ class func_def(object):
 		self.kwargs = dict(kwargs)
 		
 	def __eq__(self, x):
-		return self.name == x.name and self.args == x.args and self.kwargs == x.kwargs
+		return (self.name,self.args,self.kwargs) == (x.name,x.args,x.kwargs)
 		
 	def __str__(self):
-		return '%s(%s)' % (self.name, (', '.join(map(repr,self.args) + ['%s=%r' % i for i in self.kwargs.items()])))
+		items = map(repr,self.args) + map(lambda i:'%s=%r'%i, self.kwargs.items())
+		return '%s(%s)' % (self.name, (', '.join(items)))
 	__repr__ = __str__
 
 def build_xmlobjtree(doc, obj):
@@ -97,6 +99,7 @@ class RPC(object):
 		Caps['compression'].append('bz2')
 	
 	def __init__(self):
+		self.doc = impl.createDocument(None, self._root_name, None)
 		self.set_compression(None)
 		self.set_compression('bz2')
 		self.set_compression('zlib')
@@ -118,71 +121,72 @@ class RPC(object):
 	def decode(self, data):
 		return base64.b64decode(data)
 			
-	def pack(self, msg):
-		return self.encode(self.compress(msg)) + '\n'
+	def pack(self):
+		return self.encode(self.compress(self.doc.toxml())) + '\n'
 		
-	def unpack(self, msg):
-		return self.decompress(self.decode(msg[:-1])) if len(msg) >= 2 else ''
-	
-	@staticmethod
-	def serialize(func):
-		doc = impl.createDocument(None, 'request', None)
-		node = doc.createElement('call')
+	@classmethod
+	def from_packed_xml(cls, msg):
+		msg = msg.strip()
+		self = cls()
+		xmldoc = self.decompress(self.decode(msg)) if msg else ''
+		if xmldoc:
+			self.doc = xml.dom.minidom.parseString(xmldoc)
+		return self
+		
+	def __len__(self):
+		return len(self.doc.documentElement.childNodes)
+
+class Request(RPC):
+	_root_name = 'request'
+	def __iter__(self):
+		for node in self.doc.documentElement.childNodes:
+			handle = str(node.getAttribute('handle'))
+			func = func_def(node.getAttribute('function'))
+			for child in node.childNodes:
+				if child.nodeType == node.ELEMENT_NODE:
+					grandchild = getFirstChildElement(child)
+					if child.nodeName == 'arg':
+						func.args.append(eval_xmlobjtree(grandchild))
+					if child.nodeName == 'kwarg':
+						key = eval_xmlobjtree(grandchild)
+						func.kwargs[key] = eval_xmlobjtree(getNextSiblingElement(grandchild))
+			yield (handle, func)
+		
+	def append(self, func):
+		node = self.doc.createElement('call')
 		iden = '%08x' % random.getrandbits(32)
 		iden += time.strftime('%Y%m%d%H%M%S',time.gmtime())
 		iden += repr(func)
 		node.setAttribute('function', func.name)
 		node.setAttribute('handle', hashlib.md5(iden).hexdigest())
 		for arg in func.args:
-			a = doc.createElement('arg')
-			a.appendChild(build_xmlobjtree(doc, arg))
+			a = self.doc.createElement('arg')
+			a.appendChild(build_xmlobjtree(self.doc, arg))
 			node.appendChild(a)
 		for key in func.kwargs:
-			a = doc.createElement('kwarg')
-			a.appendChild(build_xmlobjtree(doc, key))
-			a.appendChild(build_xmlobjtree(doc, func.kwargs[key]))
+			a = self.doc.createElement('kwarg')
+			a.appendChild(build_xmlobjtree(self.doc, key))
+			a.appendChild(build_xmlobjtree(self.doc, func.kwargs[key]))
 			node.appendChild(a)
-		doc.documentElement.appendChild(node)
-		return doc.toxml()
-		
-	@staticmethod
-	def deserialize(xmldoc):
-		#print xmldoc
-		doc = xml.dom.minidom.parseString(xmldoc)
-		#for node in top.childNodes:
-		node = getFirstChildElement(doc.documentElement)
-		handle = str(node.getAttribute('handle'))
-		func = func_def(node.getAttribute('function'))
-		for child in node.childNodes:
-			if child.nodeType == node.ELEMENT_NODE:
-				grandchild = getFirstChildElement(child)
-				if child.nodeName == 'arg':
-					func.args.append(eval_xmlobjtree(grandchild))
-				if child.nodeName == 'kwarg':
-					key = eval_xmlobjtree(grandchild)
-					func.kwargs[key] = eval_xmlobjtree(getNextSiblingElement(grandchild))
-		return handle, func
-		
-	@staticmethod
-	def respond(handle, typ, payload):
-		doc = impl.createDocument(None, 'response', None)
-		node = doc.createElement(typ)
+		self.doc.documentElement.appendChild(node)
+	
+class Response(RPC):
+	_root_name = 'reponse'
+	def append(self, handle, typ, payload):
+		node = self.doc.createElement(typ)
 		node.setAttribute('handle', handle)
-		node.appendChild(build_xmlobjtree(doc, payload))
-		doc.documentElement.appendChild(node)
-		return doc.toxml()
+		node.appendChild(build_xmlobjtree(self.doc, payload))
+		self.doc.documentElement.appendChild(node)
 		
-	@staticmethod
-	def interpret_response(xmldoc):
-		doc = xml.dom.minidom.parseString(xmldoc)
-		node = getFirstChildElement(doc.documentElement)
-		handle = str(node.getAttribute('handle'))
-		resp = node.nodeName
-		payload = eval_xmlobjtree(getFirstChildElement(node))
-		if resp == 'return':
-			return payload
-		elif resp == 'error':
-			raise Exception(payload)
+	def __iter__(self):
+		for node in self.doc.documentElement.childNodes:
+			handle = str(node.getAttribute('handle'))
+			resp = node.nodeName
+			payload = eval_xmlobjtree(getFirstChildElement(node))
+			if resp == 'return':
+				yield handle, payload
+			elif resp == 'error':
+				yield handle, Exception(payload)
 
 def getFirstChildElement(node):
 	node = node.firstChild
@@ -196,65 +200,68 @@ def getNextSiblingElement(node):
 		node = node.nextSibling
 	return node
 			
-class RPCClient(RPC):
-	def __init__(self, host, port):
-		RPC.__init__(self)
+class Client(object):
+	def __init__(self):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		self.sock.connect((host, port))
 		#negotiate capabilities
 		self.wfile = self.sock.makefile('wb')
 		self.rfile = self.sock.makefile('rb')
-	
-	def call(self, f, *args, **kwargs):
-		func = func_def(f, *args, **kwargs)
-		request = self.serialize(func)
-		self.wfile.write(self.pack(request))
-		self.wfile.flush()
-		response = self.unpack(self.rfile.readline())
-		return self.interpret_response(response)
-
-class RPCRequestHandler(SocketServer.StreamRequestHandler):
-	def setup(self):
-		SocketServer.StreamRequestHandler.setup(self)
-		self.functions = self.server.functions
-		self.pack = self.server.pack
-		self.unpack = self.server.unpack
 		
+	def connect(self, (host, port)):
+		self.sock.connect((host, port))
+		
+	def close(self):
+		self.sock.close()
+	
+	def call_quick(self, f, *args, **kwargs):
+		func = func_def(f, *args, **kwargs)
+		request = Request()
+		request.append(func)
+		for handle, payload in self.call(request):
+			return handle, payload
+		
+	def call(self, request):
+		self.wfile.write(request.pack())
+		self.wfile.flush()
+		line = self.rfile.readline()
+		if line:
+			return iter(Response.from_packed_xml(line))
+		else:
+			raise EOFError
+
+class RequestHandler(SocketServer.StreamRequestHandler):
 	def debug(self, text):
 		print 'Client %s:%s -' % self.client_address, text
 		
 	def handle(self):
 		self.debug('Connected')
 		while True:
-			request = self.unpack(self.rfile.readline())
+			request = Request.from_packed_xml(self.rfile.readline())
 			if not request:
 				break
-			try:
-				handle, func = RPC.deserialize(request)
-				self.debug('Called ' + str(func))
-				typ = 'return'
-				f = self.functions[func.name]
-				ret = f(*func.args, **func.kwargs)
-			except BaseException, e:
-				ret = traceback.format_exc(e)
-				typ = 'error'
-				self.debug('Error\n' + ret)
-			else:
-				self.debug('Returning ' + repr(ret))
-			resp = RPC.respond(handle, typ, ret)
-			self.wfile.write(self.pack(resp))
+			resp = Response()
+			for handle, func in request:
+				try:
+					self.debug('Called ' + str(func))
+					typ = 'return'
+					ret = self.server.on_call(func.name, *func.args, **func.kwargs)
+				except BaseException, e:
+					ret = traceback.format_exc(e)
+					typ = 'error'
+					self.debug('Error\n' + ret)
+				else:
+					self.debug('Returning ' + repr(ret))
+				resp.append(handle, typ, ret)
+			self.wfile.write(resp.pack())
 			self.wfile.flush()
 		self.debug('Disconnected')
 		
-class RPCServer(SocketServer.TCPServer, RPC):
+class Server(SocketServer.TCPServer):
 	allow_reuse_address = True
 	def __init__(self, address, handler=None):
-		SocketServer.TCPServer.__init__(self, address, handler or RPCRequestHandler)
-		RPC.__init__(self)
-		self.functions = {}
-	
-	def register(self, name, func):
-		self.functions[name] = func
+		SocketServer.TCPServer.__init__(self, address, handler or RequestHandler)
+
+class ThreadingServer(SocketServer.ThreadingMixIn, Server): pass
 
 if __name__=='__main__':
 	import StringIO
@@ -264,32 +271,31 @@ if __name__=='__main__':
 	if len(sys.argv) == 1:
 		def a(b, c, genre=None):
 			return 789, b, c, genre
-		server = RPCServer((HOST, PORT))
+		server = Server((HOST, PORT), {'print':sys.stdout.write})
 		server.register('a', a)
 		try:
 			server.serve_forever()
 		except KeyboardInterrupt:
 			pass
 	elif sys.argv[1] == 'client':
-		client = RPCClient(HOST, PORT)
-		print repr(client.call('a', 123, '456', genre='jazz'))
-		print repr(client.call('a', '456', 'apple', genre='classical'))
+		client = Client()
+		client.connect((HOST, PORT))
+		print repr(client.call_quick('a', 123, '456', genre='jazz'))
+		print repr(client.call_quick('a', '456', 'apple', genre='classical'))
 	elif sys.argv[1] == 'unittest':
-		test = [{0:u'0'}, 1,'2<int/>',(3.0,{True:5, '6':complex(1,2.5), False:None})]
+		test = func_def('test', [{0:u'0'}, 1,'2<int/>',(3.0,{True:5, '6':complex(1,2.5), False:None})])
 		print repr(test)
 		
-		doc = impl.createDocument(None, 'test', None)
-		doc.documentElement.appendChild(build_xmlobjtree(doc, test))
-		print doc.toxml()
+		request = Request()
+		request.append(test)
+		print request.doc.toxml()
 		
-		rpc = RPC()
-		sent = rpc.pack(doc.toxml())
+		sent = request.pack()
 		print repr(sent)
-		rcvd = rpc.unpack(sent)
-		print len(repr(test)), '/', len(rcvd), '/', len(sent)
+		rcvd = request.from_packed_xml(sent)
+		print len(request.encode(request.compress(repr(test)))), '/', len(rcvd.doc.toxml()), '/', len(sent)
 		
-		doc = xml.dom.minidom.parseString(rcvd)
-		result = eval_xmlobjtree(doc.documentElement.firstChild)
+		for handle, result in rcvd:
+			break
 		print repr(result)
-
 		exit(test != result)

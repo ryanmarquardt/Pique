@@ -30,26 +30,51 @@
 from pique.client import Client
 import sys
 
-host = 'localhost' if len(sys.argv) == 1 else sys.argv[1]
-serv = Client(host)
-serv.connect()
+import optparse
 
-if len(sys.argv) > 1:
+parser = optparse.OptionParser()
+parser.add_option('-H', '--host', dest='host', default='localhost',
+  help='IP address of the server')
+
+options, args = parser.parse_args()
+print options, args
+print 'Connecting to host', options.host
+serv = Client()
+serv.connect(options.host)
+serv.reconnect = True
+
+import readline
+import shlex
+
+class shell(object):
+	def __init__(self, prompt):
+		self.prompt = prompt if sys.stdin.isatty() else ''
+		
+	def __iter__(self):
+		try:
+			while True:
+				try:
+					line = raw_input(self.prompt)
+				except (EOFError, KeyboardInterrupt):
+					break
+				yield line
+		finally:
+			if sys.stdin.isatty():
+				print
+
+def format(obj):
+	if isinstance(obj, (list,tuple,set)):
+		return '\n'.join(obj)
+	else:
+		return repr(obj)
+
+if args:
 	result = serv.ask(*sys.argv[1:])
 	print result
 else:
-	import readline
-	import shlex
-	prompt = '(pique)%s: ' % host if sys.stdin.isatty() else ''
-		
-	while True:
-		try:
-			cmd = raw_input(prompt)
-			if cmd:
-				result = serv.ask(*shlex.split(cmd,True))
-				print result
-		except EOFError:
-			break
-		except KeyboardInterrupt:
-			break
-	if sys.stdin.isatty(): print
+	for line in shell('(pique)%s: ' % options.host):
+		argv = shlex.split(line, True)
+		print argv
+		if argv:
+			handle, result = serv.call_quick(*argv)
+			print format(result)

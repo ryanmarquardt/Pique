@@ -29,35 +29,18 @@
 import socket
 import time
 
-from common import *
+import sys
 
-class RawClient(object):
-	def __init__(self, host, port=NETPORT):
-		self.addr = (host, port)
+from common import *
+import rpc
+
+class Client(rpc.Client):
+	def __init__(self):
+		rpc.Client.__init__(self)
 		self.credentials = None
 		
-	def connect(self):
-		pass
-		
+	def connect(self, host, port=NETPORT):
+		rpc.Client.connect(self, (host, port))
+				
 	def set_credentials(self, user):
 		self.credentials = user,
-		
-	def ask(self, *args):
-		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.connect(self.addr)
-		try:
-			if len(args) == 0:
-				raise ValueError('Need at least 1 argument')
-			packet = '\n'.join(args) + '\n\n'
-			while packet:
-				packet = packet[sock.send(packet):]
-			buf = sock.recv(BUFSIZE)
-			while buf:
-				result += buf
-				buf = sock.recv(BUFSIZE)
-			return result
-		finally:
-			sock.close()
-
-class Client(RawClient):
-	pass
