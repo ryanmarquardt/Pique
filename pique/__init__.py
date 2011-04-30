@@ -60,11 +60,17 @@ class PluginManager(collections.defaultdict):
 	def __init__(self):
 		self.conf = Configuration()
 		self['commandmap'] = {'quit': self.quit}
-		self['commandmap']['commands'] = self['commandmap'].keys
+		self['commandmap']['commands'] = self.commands
 		self.order = collections.deque()
 		for _, path in self.conf['Plugins']:
 			self[path]
 		debug('Commands:', *sorted(self['commandmap'].keys()))
+		
+	def commands(self):
+		'''commands() -> List
+
+Returns a list of all available commands.'''
+		return sorted(self['commandmap'].keys())
 		
 	def __missing__(self, path):
 		debug('Load plugin', path)
@@ -95,6 +101,9 @@ class PluginManager(collections.defaultdict):
 				plugin.start()
 		
 	def quit(self):
+		'''quit() -> None
+
+Terminate the server.'''
 		if gtk.main_level():
 			gtk.main_quit()
 		
