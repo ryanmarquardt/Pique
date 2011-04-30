@@ -39,23 +39,11 @@ import SocketServer
 
 NetFormat = str
 
-class RequestHandler(rpc.RequestHandler):
-	def handle(self):
-		self.server.clients.add(self)
-		rpc.RequestHandler.handle(self)
-		self.server.clients.remove(self)
-		
-	def quit(self):
-		self.wfile.write('\n')
-		self.rfile.close()
-
 class NetThread(rpc.ThreadingServer, bgthread.BgThread, PObject):
 	name = "NetworkThread"
-	
 	def __init__(self, *args, **kwargs):
 		bgthread.BgThread.__init__(self, *args, **kwargs)
 		self.dependencies = {'commandmap':self.on_set_commandmap}
-		self.clients = set()
 		self.commands = {}
 		
 	def main(self, confitems):
@@ -69,16 +57,11 @@ class NetThread(rpc.ThreadingServer, bgthread.BgThread, PObject):
 		if name == 'ping':
 			return None
 		elif name == 'help':
-			return self.commandmap[name].__doc__
+			return self.commandmap[args[0]].__doc__
 		else:
-			debug(self.commandmap)
 			debug(name, args, kwargs)
 			func = self.commandmap[name]
 			return func(*args, **kwargs)
 			
 	def on_set_commandmap(self, commandmap):
 		self.commandmap = commandmap
-			
-	def quit(self):
-		for client in self.clients:
-			client.quit()

@@ -37,12 +37,7 @@ parser.add_option('-H', '--host', dest='host', default='localhost',
   help='IP address of the server')
 
 options, args = parser.parse_args()
-print options, args
-print 'Connecting to host', options.host
-serv = Client()
-serv.connect(options.host)
-serv.reconnect = True
-
+#print options, args
 import readline
 import shlex
 
@@ -57,24 +52,35 @@ class shell(object):
 					line = raw_input(self.prompt)
 				except (EOFError, KeyboardInterrupt):
 					break
-				yield line
+				yield shlex.split(line, True)
 		finally:
 			if sys.stdin.isatty():
 				print
 
-def format(obj):
-	if isinstance(obj, (list,tuple,set)):
-		return '\n'.join(obj)
+def printformat(obj):
+	if obj is None:
+		return
+	elif isinstance(obj, (list,tuple,set)):
+		print '\n'.join(obj)
+	elif isinstance(obj, basestring):
+		print obj
+	elif isinstance(obj, Exception):
+		print '----- Remote Exception -----'
+		print obj.args[0]
+		print '----------------------------'
 	else:
-		return repr(obj)
+		print repr(obj)
 
-if args:
-	result = serv.ask(*sys.argv[1:])
-	print result
-else:
-	for line in shell('(pique)%s: ' % options.host):
-		argv = shlex.split(line, True)
-		print argv
-		if argv:
-			handle, result = serv.call_quick(*argv)
-			print format(result)
+print 'Connecting to host', options.host
+serv = Client()
+serv.connect(options.host)
+
+source = (args,) if args else shell('(pique)%s: ' % options.host)
+
+for argv in source:
+	if argv:
+		print 'Calling', ' '.join(argv)
+		handle, result = serv.call_quick(*argv)
+		printformat(result)
+
+print 'Disconnecting'
