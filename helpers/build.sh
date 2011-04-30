@@ -56,26 +56,28 @@ case $1 in
 		pack
 		unpack
 		export PYTHONPATH="$PWD/dist/${PY_FULLNAME}"
+		export HOME="$PWD"
+		export PATH="$PWD/dist/${PY_FULLNAME}/tools:$PATH"
+		export PATH="$PWD/dist/${PY_FULLNAME}:$PATH"
 		if [ -n "$2" ]; then
 			shift 1
 			indir "dist/${PY_FULLNAME}" "$@"
 		else
-            echo "Starting subshell with proper environment..."
+			echo "Starting subshell with proper environment..."
 			indir "dist/${PY_FULLNAME}" "$COLORTERM" &
 			echo "Starting server..."
 			indir "dist/${PY_FULLNAME}" ./piqued
-			fg
 		fi
 		;;
-    ppa-upload|ppa)
-        deb source-diff
-        if [ -n "$2" ]; then
-            PPA="$2"
-        elif [ -z "$PPA" ] ; then
-            read -p "Which ppa would you like to upload to?" PPA
-        fi
-        "$DPUT" "$PPA" "dist/${PACKAGE_FULLNAME}_source.changes"
-        ;;
+	ppa-upload|ppa)
+		deb source-diff
+		if [ -n "$2" ]; then
+			PPA="$2"
+		elif [ -z "$PPA" ] ; then
+			read -p "Which ppa would you like to upload to?" PPA
+		fi
+		"$DPUT" "$PPA" "dist/${PACKAGE_FULLNAME}_source.changes"
+		;;
 	*)
 		echo "Unknown Command:" $1
         echo "Try one of:" source deb run
