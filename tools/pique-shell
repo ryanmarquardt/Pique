@@ -61,7 +61,7 @@ def printformat(obj):
 	if obj is None:
 		return
 	elif isinstance(obj, (list,tuple,set)):
-		print '\n'.join(obj)
+		print '\n'.join(map(repr,obj))
 	elif isinstance(obj, basestring):
 		print obj
 	elif isinstance(obj, Exception):
