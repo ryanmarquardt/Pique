@@ -51,7 +51,10 @@ class ConsoleThread(bgthread.BgThread):
 	def main(self, confitems):
 		try:
 			for key in self.rawtty:
-				self.handler(key)
+				try:
+					self.handler(key)
+				except BaseException, e:
+					debug(traceback.format_exc(e))
 		except KeyboardInterrupt:
 			self.handler('quit')
 		finally:

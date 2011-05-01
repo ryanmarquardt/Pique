@@ -42,12 +42,14 @@ class KeyMap(dict):
 		self.keys[key] = cmd
 		
 	def interpret(self, key):
+		debug(self.keys)
+		key = key.lower()
 		try:
-			func = self.commandmap[self.keys[key.lower()]]
+			func = self.commandmap[self.keys[key]]
 			return func()
 		except KeyError:
 			try:
-				func = self.commandmap[key.lower()]
+				func = self.commandmap[key]
 				return func()
 			except KeyError:
-				debug('No key binding for', key)
+				debug('No key binding for', repr(key))
