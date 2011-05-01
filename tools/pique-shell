@@ -42,7 +42,7 @@ import readline
 import shlex
 import os.path
 
-def shell(self, prompt, history_file=None):
+def shell(prompt, history_file=None):
 	prompt = prompt if sys.stdin.isatty() else ''
 	if history_file:
 		try:
@@ -52,7 +52,7 @@ def shell(self, prompt, history_file=None):
 	try:
 		while True:
 			try:
-				line = raw_input(self.prompt)
+				line = raw_input(prompt)
 			except (EOFError, KeyboardInterrupt):
 				break
 			yield shlex.split(line, True)
