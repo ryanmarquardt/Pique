@@ -1,5 +1,5 @@
 stop
 clear
+random
 findadd artist "Family Guy"
 playlist_list
-play
