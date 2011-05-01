@@ -65,6 +65,10 @@ class JobsManager(PObject):
 		return id
 		
 	def jobstatus(self, id):
+		'''jobstatus(id_number) -> Text
+
+Return the status of a background job. Return value will be one of 'done', 
+'error', or 'pending'.'''
 		id = int(id)
 		if id in self.result:
 			if self.result[id][1] is None:

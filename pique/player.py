@@ -127,19 +127,20 @@ class Player(PObject):
 		
 		self.commands = {
 			'next':			self.next,
-			'play-pause':	self.play_pause,
+			'play_pause':	self.play_pause,
 			'play':			self.play,
 			'pause':		self.pause,
 			'stop':			self.stop,
 			'previous':		self.previous,
 			'seek':			self.seek,
-			'set-volume':	self.set_volume,
-			'volume-up':	lambda:self.set_volume(.05, False),
-			'volume-down':	lambda:self.set_volume(-.05, False),
-			'mute':			lambda:self.set_volume(0, True),
+			'set_volume':	self.set_volume,
+			'get_volume':	self.get_volume,
+			'volume_up':	self.volume_up,
+			'volume_down':	self.volume_down,
+			'mute':			self.mute,
 			'status':		self.status,
 		}
-	
+		
 	def on_set_library(self, library):
 		self.lib = library
 	
@@ -214,7 +215,7 @@ class Player(PObject):
 	def refresh_xid(self, widget=None, event=None):
 		if self._window is not None:
 			self.video_sink.set_xwindow_id(self._window.window.xid)
-			
+		
 	def seek(self, new, absolute=True):
 		'''seek(new_position, absolute=True) -> None
 
@@ -228,7 +229,15 @@ number of seconds forward or backward to move.'''
 		self.player.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, new)
 		
 	def status(self):
-		return StateMap[self.player.get_state()[0]]
+		'''status() -> Dict
+
+Returns the current playing state.'''
+		return {
+			'state':StateMap[self.player.get_state()[0]],
+			'position':self.get_position() / SECOND,
+			'duration':self.get_duration() / SECOND,
+			'current_track':self.player.get_property('uri'),
+		}
 	
 	def isplaying(self):
 		return self.player.get_state()[1] == gst.STATE_PLAYING
@@ -257,16 +266,45 @@ Pause playback.'''
 		self.set_state('paused')
 		
 	def stop(self):
+		'''stop() -> None
+
+Stop playback.'''
 		debug('stop')
 		self.set_state('null')
 		
 	def get_volume(self):
+		'''get_volume() -> Number
+
+Returns the player's current volume, a number between 0 and 1.'''
 		return self.player.get_property('volume')
 		
 	def set_volume(self, level, absolute=True):
+		'''set_volume(level, absolute=True) -> None
+
+Change the player volume. If absolute is True, volume is set to level. If
+absolute is False, level is added to the volume. level is a number between 0 and
+1.'''
 		if not absolute:
 			level = max(0, min(1, self.get_volume() + level))
 		self.player.set_property('volume', level)
+		
+	def volume_up(self):
+		'''volume_up() -> None
+
+Raises the volume by 5%.'''
+		self.set_volume(.05, False)
+		
+	def volume_down(self):
+		'''volume_down() -> None
+
+Lowers the volume by 5%.'''
+		self.set_volume(-.05, False)
+		
+	def mute(self):
+		'''mute() -> None
+
+Sets the volume to 0'''
+		self.set_volume(0, True)
 		
 	def get_position(self, percent=False):
 		try:
@@ -281,6 +319,10 @@ Pause playback.'''
 			return 0
 		
 	def previous(self):
+		'''previous() -> None
+
+Move playback to the beginning of the track, or to the previous track in the
+playlist.'''
 		debug('previous')
 		pos = self.get_position()
 		self.stop()

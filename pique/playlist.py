@@ -27,6 +27,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import collections
+import random
 from common import *
 
 class Playlist(PObject):
@@ -44,7 +45,7 @@ class Playlist(PObject):
 			'repeat':	self.set_repeat,
 			'random':	self.set_random,
 			'findadd':	self.findadd,
-			'playlist-list':	lambda: self.entries,
+			'playlist-list':	self.listall,
 		}
 		
 	def on_set_library(self, library):
@@ -56,10 +57,21 @@ class Playlist(PObject):
 		self._extend()
 		self.emit('changed')
 		
+	def listall(self):
+		'''playlist_list() -> List
+
+Returns a list of all uris in the playlist.'''
+		
 	def add(self, uri):
+		'''add(uri) -> None
+
+Appends uri to the playlist.'''
 		self.load(self.entries + (uri,))
 		
 	def findadd(self, type, what):
+		'''findadd(column, value) -> None
+
+Adds all media from the library where 'column' has 'value'.'''
 		uris = self.library.find(type, what)
 		self.load(self.entries + tuple(uris))
 		
@@ -102,13 +114,22 @@ class Playlist(PObject):
 		return self.history[0]
 		
 	def clear(self):
+		'''clear() -> None
+
+Remove all entries from the playlist.'''
 		self.history = collections.deque()
 		self.history.append(None)
 		self.entries = ()
 		self.version += 1
 		
 	def set_repeat(self, yes=True):
+		'''repeat(value=True) -> None
+
+Sets whether the playlist should repeat according to value.'''
 		self.repeat = yes
 		
 	def set_random(self, yes=True):
+		'''random(value=True) -> None
+
+Sets whether entries should be played randomly according to value.'''
 		self.random = yes

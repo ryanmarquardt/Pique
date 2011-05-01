@@ -105,15 +105,27 @@ class Library(PObject):
 		debug('library has been synced')
 		
 	def Import(self, path):
+		'''import(uri) -> Integer
+
+Attempt to import the media at uri into the library. Returns the background
+job id number.'''
 		r = self.player.scan_uri(path)
 		#self.jobsmanager.submit(self.player.normalize_uri, path)
 		return r
 		
 	def find(self, type, what):
+		'''find(column, value) -> List
+
+Searches the library for media with the associated metadata. find returns
+a list of uris where table 'column' has 'value'.'''
 		idx = Columns().index(type)
 		return sorted([k for (k,v) in self.db.iteritems() if v[idx] == what])
 		
 	def edit(self, uri, key, value=None):
+		'''edit(uri, column, value) -> Dict
+
+Change the metadata for uri to have column=value. Returns a dictionary
+containing all of the uri's metdata.'''
 		idx = Columns().index(key)
 		entry = self.db[uri]
 		entry[idx] = value
@@ -121,9 +133,15 @@ class Library(PObject):
 		return entry
 		
 	def info(self, uri):
+		'''info(uri) -> Dict
+
+Returns a dict containing all of the metadata for 'uri'.'''
 		return dict(zip(Columns(), self.db[uri]))
 	
 	def select_distinct(self, *args):
+		'''list(column) -> List
+
+Returns a list of all unique entries in column.'''
 		if args:
 			which = args[0]
 			extra = args[1:]
