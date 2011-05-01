@@ -45,7 +45,7 @@ class Playlist(PObject):
 			'repeat':	self.set_repeat,
 			'random':	self.set_random,
 			'findadd':	self.findadd,
-			'playlist-list':	self.listall,
+			'playlist_list':	self.listall,
 		}
 		
 	def on_set_library(self, library):
