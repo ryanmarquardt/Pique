@@ -39,6 +39,7 @@ import gtk
 
 from common import *
 import jobs
+import inhibit
 
 def importfrom(path):
 	mod, _, cls = path.rpartition('.')
@@ -121,7 +122,8 @@ class Main(object):
 		
 	def start(self):
 		self.plugins.start()
-		gtk.main()
+		with inhibit.ScreensaverInhibitor():
+			gtk.main()
 		self.plugins.cleanup()
 	
 	def on_eos(self):
