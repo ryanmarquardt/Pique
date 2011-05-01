@@ -41,21 +41,25 @@ options, args = parser.parse_args()
 import readline
 import shlex
 
-class shell(object):
-	def __init__(self, prompt):
-		self.prompt = prompt if sys.stdin.isatty() else ''
-		
-	def __iter__(self):
+def shell(self, prompt, history_file=None):
+	prompt = prompt if sys.stdin.isatty() else ''
+	if history_file:
 		try:
-			while True:
-				try:
-					line = raw_input(self.prompt)
-				except (EOFError, KeyboardInterrupt):
-					break
-				yield shlex.split(line, True)
-		finally:
-			if sys.stdin.isatty():
-				print
+			readline.read_history_file(history_file)
+		except IOError:
+			pass
+	try:
+		while True:
+			try:
+				line = raw_input(self.prompt)
+			except (EOFError, KeyboardInterrupt):
+				break
+			yield shlex.split(line, True)
+	finally:
+		if history_file:
+			readline.write_history_file(history_file)
+		if sys.stdin.isatty():
+			print
 
 def printformat(obj):
 	if obj is None:
@@ -66,7 +70,7 @@ def printformat(obj):
 		print obj
 	elif isinstance(obj, Exception):
 		print '----- Remote Exception -----'
-		print obj.args[0]
+		print obj.args[0],	
 		print '----------------------------'
 	else:
 		print repr(obj)
@@ -75,7 +79,9 @@ print 'Connecting to host', options.host
 serv = Client()
 serv.connect(options.host)
 
-source = (args,) if args else shell('(pique)%s: ' % options.host)
+prompt = '(pique)%s: ' % options.host
+history = os.expanduser('~/.config/pique/shell_history')
+source = (args,) if args else shell(prompt, history_file=history)
 
 for argv in source:
 	if argv:
