@@ -1,5 +1,5 @@
 stop
 clear
 findadd artist "Family Guy"
-playlist-list
+playlist_list
 play
