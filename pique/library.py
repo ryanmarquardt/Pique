@@ -121,15 +121,18 @@ a list of uris where table 'column' has 'value'.'''
 		idx = Columns().index(type)
 		return sorted([k for (k,v) in self.db.iteritems() if v[idx] == what])
 		
-	def edit(self, uri, key, value=None):
-		'''edit(uri, column, value) -> Dict
+	def edit(self, uri, key, value=None, destructive=True):
+		'''edit(uri, column, value=None, destructive=True) -> Dict
 
 Change the metadata for uri to have column=value. Returns a dictionary
-containing all of the uri's metdata.'''
+containing all of the uri's metdata. If destructive is False, the value will
+not be overwritten unless it is None.'''
 		idx = Columns().index(key)
 		entry = self.db[uri]
-		entry[idx] = value
+		if destructive or entry[idx] is None:
+			entry[idx] = value
 		self.db[uri] = entry
+		self.db.sync()
 		return entry
 		
 	def info(self, uri):

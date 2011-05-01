@@ -98,7 +98,7 @@ class Player(PObject):
 		
 		self.taginject = Element('taginject')
 		audio_sink = Element(config.get('audio-plugin','gconfaudiosink'))
-		self.audio_bin = Bin(self.taginject, Element('rgvolume'), audio_sink)
+		self.audio_bin = Bin(self.taginject, Element('rganalysis'), Element('rgvolume'), audio_sink)
 		
 		self.video_sink = Element(config.get('video-plugin','gconfvideosink'))
 		self.video_sink.set_property('force-aspect-ratio', True)
@@ -115,6 +115,7 @@ class Player(PObject):
 		self.bus.connect('message::state-changed', self.on_state_changed)
 		self.bus.connect('message::error', self.on_error)
 		self.bus.connect('message::eos', self.on_eos)
+		self.bus.connect('message::tag', self.on_tag)
 		self.connect('error', self.on_private_error)
 		
 		self.last_update = ()
@@ -156,6 +157,18 @@ class Player(PObject):
 		debug('playlist changed')
 		if not self.isplaying():
 			self.next()
+			
+	def on_tag(self, bus, message):
+		taglist = message.parse_tag()
+		uri = self.player.get_property('uri')
+		for k in taglist.keys():
+			k,v = k.replace('-','_'),convert(taglist[k])
+			try:
+				self.lib.edit(uri, k, v, destructive=False)
+			except ValueError:
+				debug('Ignoring unrecognized tag', k, '=', v)
+			else:
+				debug('Replaced tag', k, '=', v)
 			
 	def on_playlist_new_uri(self, uri):
 		self.load(uri)
@@ -349,8 +362,10 @@ Move playback to the next item in the playlist.'''
 		debug('load', uri)
 		tags = self.lib[uri]
 		self.player.set_property('uri', uri)
-		rgtags = 'replaygain-reference-level','replaygain-track-gain','replaygain-track-peak'
-		self.taginject.props.tags = ','.join(['%s=%s' % (k,tags[k.replace('-','_')]) for k in rgtags])
+		rgtags = 'replaygain_reference_level','replaygain_track_gain','replaygain_track_peak'
+		injected = ','.join(['%s=%s' % (k.replace('_','-'),tags[k]) for k in rgtags if tags[k]])
+		debug('Injecting tags', injected)
+		self.taginject.props.tags = injected
 		self.refresh_xid()
 		
 	def scan_uri(self, uri):
