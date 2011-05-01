@@ -85,7 +85,7 @@ Adds all media from the library where 'column' has 'value'.'''
 		#self.history.rotate(len(self.entries))
 		
 	def next(self):
-		debug(self.history)
+		#debug(self.history)
 		self.history.rotate(-1)
 		if self.history[0] is None:
 			#End of playlist
