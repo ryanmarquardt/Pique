@@ -40,6 +40,7 @@ options, args = parser.parse_args()
 #print options, args
 import readline
 import shlex
+import os.path
 
 def shell(self, prompt, history_file=None):
 	prompt = prompt if sys.stdin.isatty() else ''
@@ -80,7 +81,7 @@ serv = Client()
 serv.connect(options.host)
 
 prompt = '(pique)%s: ' % options.host
-history = os.expanduser('~/.config/pique/shell_history')
+history = os.path.expanduser('~/.config/pique/shell_history')
 source = (args,) if args else shell(prompt, history_file=history)
 
 for argv in source:
