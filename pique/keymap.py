@@ -42,7 +42,6 @@ class KeyMap(dict):
 		self.keys[key] = cmd
 		
 	def interpret(self, key):
-		debug(self.keys)
 		key = key.lower()
 		try:
 			func = self.commandmap[self.keys[key]]

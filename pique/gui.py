@@ -105,6 +105,7 @@ class VideoBox(PObject, gtk.VBox):
 		self.slider.get_child().connect('scroll-event', debug)
 		self.movie_window.connect('button-press-event', self.on_button_press_event)
 		self.movie_window.connect('expose-event', self.on_signal, 'xid-request')
+		self.movie_window.connect('configure-event', self.on_signal, 'xid-request')
 		
 	def set_keymap(self, keymap):
 		debug('GUI Set Keymap')
@@ -196,7 +197,7 @@ class GUI(gtk.Window):
 		self.videobox.connect('play-pause', thread.start_new_thread, player.play_pause, ())
 		self.videobox.connect('next', thread.start_new_thread, player.next, ())
 		self.videobox.connect('previous', thread.start_new_thread, player.previous, ())
-		self.videobox.connect('position', lambda x:thread.start_new_thread(player.seek,(x,)))
+		self.videobox.connect('position', lambda x:thread.start_new_thread(player.seek,(x/SECOND,)))
 		self.stop = player.stop
 		#self.connect('volume', player.set_volume)
 		

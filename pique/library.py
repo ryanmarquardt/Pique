@@ -59,10 +59,6 @@ def Columns(version=TABLE_VERSION):
 		'added',
 	]
 
-	#def __iter__(self):
-		#for i in sorted(self.__elements.items(),key=lambda i:(i[1].artist,i[1].album,i[1].track_number)):
-			#yield i[0]
-
 def makedirs(path):
 	parent = os.path.dirname(path)
 	if not os.path.exists(parent):

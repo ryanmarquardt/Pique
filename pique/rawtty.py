@@ -152,7 +152,6 @@ class rawtty(object):
 						if seq not in KNOWN_SEQUENCES:
 							#No match
 							raise IOError('Unrecognized Sequence %r' % seq)
-			#print repr(seq), repr(NAMES.get(quit,quit)), seq == NAMES.get(quit,quit)
 			if seq != NAMES.get(self.quit,self.quit):
 				yield NAMES.get(seq,seq)
 			else:

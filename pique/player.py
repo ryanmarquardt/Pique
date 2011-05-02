@@ -221,9 +221,13 @@ class Player(PObject):
 	@window.setter
 	def window(self, w):
 		if self._window is not None:
-			self._window.disconnect(self._window_handler)
+			for h in self._window_handlers:
+				self._window.disconnect(h)
 		self._window = w
-		self._window_handler = self._window.connect('expose-event', self.refresh_xid)
+		self._window_handlers = (
+			self._window.connect('expose-event', self.refresh_xid),
+			self._window.connect('configure-event', self.refresh_xid),
+		)
 		
 	def refresh_xid(self, widget=None, event=None):
 		if self._window is not None:
@@ -237,7 +241,7 @@ location to continue playback. If absolute is False, new_position is the
 number of seconds forward or backward to move.'''
 		new *= SECOND
 		if not absolute:
-			new = max(0, new + self.get_position(percent=percent))
+			new = max(0, new + self.get_position())
 		debug('seek', new)
 		self.player.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, new)
 		
@@ -371,7 +375,6 @@ Move playback to the next item in the playlist.'''
 	def scan_uri(self, uri):
 		tags = self.tagger(uri, normalize=False)
 		self.emit('new-tags', uri, tags)
-		#self.jobsmanager.submit(self.normalize_uri, uri)
 		
 	def normalize_uri(self, uri):
 		tags = self.tagger(uri, normalize=True)

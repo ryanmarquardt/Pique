@@ -61,6 +61,7 @@ class Playlist(PObject):
 		'''playlist_list() -> List
 
 Returns a list of all uris in the playlist.'''
+		return self.entries
 		
 	def add(self, uri):
 		'''add(uri) -> None
@@ -82,10 +83,8 @@ Adds all media from the library where 'column' has 'value'.'''
 			self.history.extend(entries)
 		else:
 			self.history.extend(self.entries)
-		#self.history.rotate(len(self.entries))
 		
 	def next(self):
-		#debug(self.history)
 		self.history.rotate(-1)
 		if self.history[0] is None:
 			#End of playlist
