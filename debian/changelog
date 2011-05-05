@@ -1,3 +1,11 @@
+pique (0.02.2) maverick; urgency=low
+
+  * Improved pique-shell code
+  * Added documentation for commands
+  * Replaygain analysis happens during playback
+
+ -- Ryan Marquardt (orbnauticus) <ryan.marquardt@gmail.com>  Thu, 05 May 2011 14:17:58 +0900
+
 pique (0.02.1) maverick; urgency=low
 
   * Added new RPC code
