@@ -127,14 +127,19 @@ not be overwritten unless it is None.'''
 		entry = self.db[uri]
 		if destructive or entry[idx] is None:
 			entry[idx] = value
+		else:
+			raise ValueError('Value already set')
 		self.db[uri] = entry
 		self.db.sync()
 		return entry
 		
-	def info(self, uri):
-		'''info(uri) -> Dict
+	def info(self, uri=None):
+		'''info(uri=None) -> Dict
 
-Returns a dict containing all of the metadata for 'uri'.'''
+Returns a dict containing all of the metadata for 'uri'. If uri is not given,
+information is returned for the currently playing track.'''
+		if uri is None:
+			uri = self.player.player.get_property('uri')
 		return dict(zip(Columns(), self.db[uri]))
 	
 	def select_distinct(self, *args):

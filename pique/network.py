@@ -49,7 +49,7 @@ class NetThread(rpc.ThreadingServer, bgthread.BgThread, PObject):
 	def main(self, confitems):
 		config = dict(confitems)
 		host = config.get('listen-host', 'localhost')
-		port = config.get('listen-port', 8145)
+		port = config.get('listen-port', NETPORT)
 		rpc.ThreadingServer.__init__(self, (host, port))
 		self.serve_forever()
 		

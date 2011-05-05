@@ -242,15 +242,15 @@ class RequestHandler(SocketServer.StreamRequestHandler):
 			resp = Response()
 			for handle, func in request:
 				try:
-					self.debug('Called ' + str(func))
+					#self.debug('Called ' + str(func))
 					typ = 'return'
 					ret = self.server.on_call(func.name, *func.args, **func.kwargs)
 				except BaseException, e:
 					ret = traceback.format_exc(e)
 					typ = 'error'
-					self.debug('Error\n' + ret)
-				else:
-					self.debug('Returning ' + repr(ret))
+					#self.debug('Error\n' + ret)
+				#else:
+					#self.debug('Returning ' + repr(ret))
 				resp.append(handle, typ, ret)
 			self.wfile.write(resp.pack())
 			self.wfile.flush()

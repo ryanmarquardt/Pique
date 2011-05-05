@@ -106,6 +106,7 @@ class VideoBox(PObject, gtk.VBox):
 		self.movie_window.connect('button-press-event', self.on_button_press_event)
 		self.movie_window.connect('expose-event', self.on_signal, 'xid-request')
 		self.movie_window.connect('configure-event', self.on_signal, 'xid-request')
+		self.movie_window.connect('realize', self.on_signal, 'xid-request')
 		
 	def set_keymap(self, keymap):
 		debug('GUI Set Keymap')

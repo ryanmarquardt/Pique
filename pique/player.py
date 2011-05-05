@@ -166,9 +166,10 @@ class Player(PObject):
 			try:
 				self.lib.edit(uri, k, v, destructive=False)
 			except ValueError:
-				debug('Ignoring unrecognized tag', k, '=', v)
-			else:
-				debug('Replaced tag', k, '=', v)
+				pass
+				#debug('Ignoring unrecognized tag', k, '=', v)
+			#else:
+				#debug('Replaced tag', k, '=', v)
 			
 	def on_playlist_new_uri(self, uri):
 		self.load(uri)
