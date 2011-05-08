@@ -78,8 +78,8 @@ class Library(PObject):
 			'edit':	self.edit,
 		}
 		self.dependencies = {
-			'pique.player.Player': self.on_set_player,
-			'pique.jobs.JobsManager': self.on_set_jobsmanager,
+			'Player': self.on_set_player,
+			'JobsManager': self.on_set_jobsmanager,
 		}
 		
 	def __getitem__(self, uri):

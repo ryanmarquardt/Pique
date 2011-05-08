@@ -160,8 +160,8 @@ def connect_accel(acg, name, func):
 class GUI(gtk.Window):
 	def __init__(self, confitems):
 		self.dependencies = {
-			'pique.player.Player': self.on_set_player,
-			'pique.keymap.KeyMap': self.on_set_keymap,
+			'Player': self.on_set_player,
+			'KeyMap': self.on_set_keymap,
 			'commandmap': self.on_set_commandmap,
 		}
 		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)

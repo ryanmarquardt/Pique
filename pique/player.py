@@ -89,9 +89,9 @@ StateMap = {
 class Player(PObject):
 	def __init__(self, confitems):
 		self.dependencies = {
-			'pique.library.Library':self.on_set_library,
-			'pique.playlist.Playlist':self.on_set_playlist,
-			'pique.jobs.JobsManager':self.on_set_jobsmanager,
+			'Library':self.on_set_library,
+			'Playlist':self.on_set_playlist,
+			'JobsManager':self.on_set_jobsmanager,
 		}
 		config = dict(confitems)
 		self.state_change_lock = threading.Lock()

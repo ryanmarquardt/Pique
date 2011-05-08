@@ -32,7 +32,7 @@ from common import *
 
 class Playlist(PObject):
 	def __init__(self, uris=[], repeat=False, random=False):
-		self.dependencies = {'pique.library.Library': self.on_set_library}
+		self.dependencies = {'Library': self.on_set_library}
 		self.repeat = repeat
 		self.random = random
 		self.history = collections.deque()

@@ -33,7 +33,7 @@ class ConsoleThread(bgthread.BgThread):
 	name = 'ConsoleThread'
 	def __init__(self, *args, **kwargs):
 		bgthread.BgThread.__init__(self, *args, **kwargs)
-		self.dependencies = {'pique.keymap.KeyMap':self.on_set_keymap}
+		self.dependencies = {'KeyMap':self.on_set_keymap}
 		
 	def connect(self, key, func, *args, **kwargs):
 		self.keymap[key] = func,args,kwargs

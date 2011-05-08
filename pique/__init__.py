@@ -48,14 +48,15 @@ def importfrom(path):
 	
 class PluginError(Exception): pass
 
-class Configuration(object):
+class Configuration(ConfigParser.SafeConfigParser):
+	optionxform = str
 	def __init__(self):
-		self.conf = ConfigParser.SafeConfigParser()
-		self.conf.readfp(open(os.path.join(os.path.dirname(__file__), 'default.conf')))
-		self.conf.read([os.path.expanduser('~/.config/pique/pique.conf')])
+		ConfigParser.SafeConfigParser.__init__(self)
+		self.readfp(open(os.path.join(os.path.dirname(__file__), 'default.conf')))
+		self.read([os.path.expanduser('~/.config/pique/pique.conf')])
 	
 	def __getitem__(self, key):
-		return self.conf.items(key)
+		return self.items(key)
 
 class PluginManager(collections.defaultdict):
 	def __init__(self):
@@ -63,8 +64,10 @@ class PluginManager(collections.defaultdict):
 		self['commandmap'] = {'quit': self.quit}
 		self['commandmap']['commands'] = self.commands
 		self.order = collections.deque()
-		for _, path in self.conf['Plugins']:
-			self[path]
+		self.pathmap = dict(self.conf['Plugins'])
+		debug(self.pathmap)
+		for name, _ in self.conf['Plugins']:
+			self[name]
 		debug('Commands:', *sorted(self['commandmap'].keys()))
 		
 	def commands(self):
@@ -73,24 +76,25 @@ class PluginManager(collections.defaultdict):
 Returns a list of all available commands.'''
 		return sorted(self['commandmap'].keys())
 		
-	def __missing__(self, path):
-		debug('Load plugin', path)
+	def __missing__(self, name):
+		path = self.conf.get('Plugins', name)
+		debug('Load plugin', name, '(%s)' % path)
 		#load plugin
 		plugin = importfrom(path)
 		try:
-			items = self.conf[plugin.__name__]
+			items = self.conf[name]
 		except ConfigParser.NoSectionError:
 			items = ()
 		p = plugin(items)
-		self[path] = p
+		self[name] = p
 		if hasattr(p, 'commands'):
 			for k in p.commands:
 				if k in self['commandmap']:
 					raise PluginError('Name conflict: %s is attempting to overwrite command %s' % (plugin.__name__, k))
 				self['commandmap'][k] = p.commands[k]
 		if hasattr(p, 'dependencies') and hasattr(p.dependencies, 'items'):
-			for name, callback in p.dependencies.items():
-				callback(self[name])
+			for which, callback in p.dependencies.iteritems():
+				callback(self[which])
 				#Automatically loads dependencies which haven't been loaded yet
 		#Store dependencies in reverse order
 		self.order.append(p)
@@ -117,8 +121,8 @@ Terminate the server.'''
 class Main(object):
 	def __init__(self):
 		self.plugins = PluginManager()
-		self.plugins['pique.player.Player'].connect('eos', self.on_eos)
-		self.plugins['pique.player.Player'].connect('error', self.on_error)
+		self.plugins['Player'].connect('eos', self.on_eos)
+		self.plugins['Player'].connect('error', self.on_error)
 		
 	def start(self):
 		self.plugins.start()
