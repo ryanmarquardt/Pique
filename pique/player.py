@@ -161,15 +161,8 @@ class Player(PObject):
 	def on_tag(self, bus, message):
 		taglist = message.parse_tag()
 		uri = self.player.get_property('uri')
-		for k in taglist.keys():
-			k,v = k.replace('-','_'),convert(taglist[k])
-			try:
-				self.lib.edit(uri, k, v, destructive=False)
-			except ValueError:
-				pass
-				#debug('Ignoring unrecognized tag', k, '=', v)
-			#else:
-				#debug('Replaced tag', k, '=', v)
+		tags = dict((k.replace('-','_'),convert(taglist[k])) for k in taglist.keys())
+		self.emit('new-tags', uri, tags)
 			
 	def on_playlist_new_uri(self, uri):
 		self.load(uri)
