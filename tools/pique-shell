@@ -27,7 +27,8 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from pique.client import Client
+import pique.client
+Client = pique.client.Client
 import sys
 
 import optparse
@@ -35,12 +36,27 @@ import optparse
 parser = optparse.OptionParser()
 parser.add_option('-H', '--host', dest='host', default='localhost',
   help='IP address of the server')
+parser.add_option('-P', '--port', dest='port', type='int',
+  help='Port to connect to')
+parser.add_option('--no-conf', action='store_true', dest='noconf',
+  help='Do not read any configuration files')
 
 options, args = parser.parse_args()
-#print options, args
+
+import os.path
+
+if options.port is None:
+	if options.noconf:
+		options.port = NETPORT
+	else:
+		import ConfigParser
+		conf = ConfigParser.SafeConfigParser()
+		conf.readfp(open(os.path.join(os.path.dirname(pique.client.__file__), 'default.conf')))
+		conf.read([os.path.expanduser('~/.config/pique/pique.conf')])
+		options.port = conf.getint('Network', 'listen-port')
+
 import readline
 import shlex
-import os.path
 
 def shell(prompt, history_file=None):
 	prompt = prompt if sys.stdin.isatty() else ''
@@ -76,9 +92,9 @@ def printformat(obj):
 	else:
 		print repr(obj)
 
-print 'Connecting to host', options.host
+print 'Connecting to host %s:%r' % (options.host, options.port)
 serv = Client()
-serv.connect(options.host)
+serv.connect(options.host, options.port)
 
 prompt = '(pique)%s: ' % options.host
 history = os.path.expanduser('~/.config/pique/shell_history')
