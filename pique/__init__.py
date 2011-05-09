@@ -49,24 +49,41 @@ def importfrom(path):
 class PluginError(Exception): pass
 
 class Configuration(ConfigParser.SafeConfigParser):
-	optionxform = str
 	def __init__(self):
 		ConfigParser.SafeConfigParser.__init__(self)
 		self.readfp(open(os.path.join(os.path.dirname(__file__), 'default.conf')))
 		self.read([os.path.expanduser('~/.config/pique/pique.conf')])
 	
-	def __getitem__(self, key):
-		return self.items(key)
+	def has_section(self, section):
+		if ConfigParser.SafeConfigParser.has_section(section):
+			return True
+		else:
+			sections = ConfigParser.SafeConfigParser.sections()
+			lowersections = map(str.lower, sections)
+			return section.lower() in lowersections
+	
+	def items(self, section, default=()):
+		if ConfigParser.SafeConfigParser.has_section(self, section):
+			real_name = section
+		else:
+			sections = ConfigParser.SafeConfigParser.sections(self)
+			lowersections = map(str.lower, sections)
+			try:
+				idx = lowersections.index(section)
+			except ValueError:
+				return default
+			real_name = sections[lowersections.index(section)]
+		return ConfigParser.SafeConfigParser.items(self, real_name)
 
 class PluginManager(collections.defaultdict):
 	def __init__(self):
 		self.conf = Configuration()
-		self['commandmap'] = {'quit': self.quit}
-		self['commandmap']['commands'] = self.commands
+		self['commandmap'] = {
+			'quit': self.quit,
+			'commands': self.commands,
+		}
 		self.order = collections.deque()
-		self.pathmap = dict(self.conf['Plugins'])
-		debug(self.pathmap)
-		for name, _ in self.conf['Plugins']:
+		for name, _ in self.conf.items('Plugins'):
 			self[name]
 		debug('Commands:', *sorted(self['commandmap'].keys()))
 		
@@ -76,29 +93,29 @@ class PluginManager(collections.defaultdict):
 Returns a list of all available commands.'''
 		return sorted(self['commandmap'].keys())
 		
+	def __getitem__(self, key):
+		return collections.defaultdict.__getitem__(self, key.lower())
+		
+	def __setitem__(self, key, value):
+		collections.defaultdict.__setitem__(self, key.lower(), value)
+		
 	def __missing__(self, name):
 		path = self.conf.get('Plugins', name)
 		debug('Load plugin', name, '(%s)' % path)
-		#load plugin
-		plugin = importfrom(path)
-		try:
-			items = self.conf[name]
-		except ConfigParser.NoSectionError:
-			items = ()
-		p = plugin(items)
-		self[name] = p
-		if hasattr(p, 'commands'):
-			for k in p.commands:
-				if k in self['commandmap']:
-					raise PluginError('Name conflict: %s is attempting to overwrite command %s' % (plugin.__name__, k))
-				self['commandmap'][k] = p.commands[k]
-		if hasattr(p, 'dependencies') and hasattr(p.dependencies, 'items'):
-			for which, callback in p.dependencies.iteritems():
-				callback(self[which])
-				#Automatically loads dependencies which haven't been loaded yet
-		#Store dependencies in reverse order
-		self.order.append(p)
-		return p
+		plugin_class = importfrom(path)
+		items = self.conf.items(name)
+		plugin = plugin_class(items)
+		self[name] = plugin
+		commandmap = self['commandmap']
+		for cmd,func in getattr(plugin, 'commands', {}).items():
+			#Set commands
+			if commandmap.setdefault(cmd, func) is not func:
+				raise PluginError('Name conflict: %s is attempting to overwrite command %s' % (plugin_class.__name__, cmd))
+		for which, callback in getattr(plugin, 'dependencies', {}).items():
+			#Pass plugin references to plugins it depends on
+			callback(self[which])
+		self.order.append(plugin) # Plugins will be started in reverse order
+		return plugin
 		
 	def start(self):
 		for plugin in self.order:
