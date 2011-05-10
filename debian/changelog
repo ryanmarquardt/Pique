@@ -1,3 +1,12 @@
+pique (0.02.3) maverick; urgency=low
+
+  * Streamlined gui/player integration
+  * Simplified and fixed plugin loading code.
+  * Rewrote library plugin
+  * Minor fixes to network.py and pique-shell
+
+ -- Ryan Marquardt (orbnauticus) <ryan.marquardt@gmail.com>  Tue, 10 May 2011 22:01:05 +0900
+
 pique (0.02.2) maverick; urgency=low
 
   * Improved pique-shell code

@@ -12,7 +12,7 @@ def find(path='.'):
 			r.append(os.path.join(path, f))
 	return r
 
-setup(name='pique', version='0.02.2',
+setup(name='pique', version='0.02.3',
 	author='Ryan Marquardt',
 	author_email='ryan.marquardt@gmail.com',
 	description='Pique Media Center',
