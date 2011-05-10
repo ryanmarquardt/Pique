@@ -31,6 +31,7 @@ from common import *
 
 import sys
 import thread
+import threading
 args, sys.argv = sys.argv, []
 
 import pygtk
@@ -102,11 +103,7 @@ class VideoBox(PObject, gtk.VBox):
 		self.previous.connect('clicked', self.on_signal, 'previous')
 		self.next.connect('clicked', self.on_signal, 'next')
 		self.slider.get_child().connect('change-value', self.on_slider)
-		self.slider.get_child().connect('scroll-event', debug)
 		self.movie_window.connect('button-press-event', self.on_button_press_event)
-		self.movie_window.connect('expose-event', self.on_signal, 'xid-request')
-		self.movie_window.connect('configure-event', self.on_signal, 'xid-request')
-		self.movie_window.connect('realize', self.on_signal, 'xid-request')
 		
 	def set_keymap(self, keymap):
 		debug('GUI Set Keymap')
@@ -119,7 +116,7 @@ class VideoBox(PObject, gtk.VBox):
 	def on_keypress(self, window, event):
 		modifiers = gtk.gdk.SHIFT_MASK | gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
 		accel = gtk.accelerator_name(event.keyval, event.state & modifiers)
-		thread.start_new_thread(self.keymap.interpret, (accel,))
+		self.keymap.interpret(accel)
 		
 	def on_button_press_event(self, window, event):
 		self.emit('clicked', window, event)
@@ -192,13 +189,14 @@ class GUI(gtk.Window):
 		}
 	
 	def on_set_player(self, player):
-		player.window = self.videobox.movie_window
-		player.connect('state-changed', self.update_state)
-		player.connect('update', self.update_time)
-		self.videobox.connect('play-pause', thread.start_new_thread, player.play_pause, ())
-		self.videobox.connect('next', thread.start_new_thread, player.next, ())
-		self.videobox.connect('previous', thread.start_new_thread, player.previous, ())
-		self.videobox.connect('position', lambda x:thread.start_new_thread(player.seek,(x/SECOND,)))
+		self.player = player
+		self.player.window = self.videobox.movie_window
+		self.player.connect('state-changed', self.update_state)
+		self.player.connect('update', self.update_time)
+		self.videobox.connect('play-pause', thread.start_new_thread, self.player.play_pause, ())
+		self.videobox.connect('next', thread.start_new_thread, self.player.next, ())
+		self.videobox.connect('previous', thread.start_new_thread, self.player.previous, ())
+		self.videobox.connect('position', lambda x:thread.start_new_thread(self.player.seek,(x/SECOND,)))
 		self.stop = player.stop
 		#self.connect('volume', player.set_volume)
 		
@@ -232,12 +230,16 @@ class GUI(gtk.Window):
 			self.__fullscreen = bool(event.new_window_state & gtk.gdk.WINDOW_STATE_FULLSCREEN)
 		
 	def fullscreen(self):
+		self.window.freeze_updates()
 		gtk.Window.fullscreen(self)
 		self.hide_controls()
+		self.window.thaw_updates()
 		
 	def unfullscreen(self):
+		self.window.freeze_updates()
 		gtk.Window.unfullscreen(self)
 		self.show_controls()
+		self.window.thaw_updates()
 		
 	def toggle_fullscreen(self):
 		'''fullscreen() -> None

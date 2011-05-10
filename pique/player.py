@@ -33,6 +33,7 @@ import pygst
 pygst.require('0.10')
 import gst
 import gobject
+import gtk.gdk
 
 sys.argv = args
 
@@ -101,7 +102,6 @@ class Player(PObject):
 		self.audio_bin = Bin(self.taginject, Element('rganalysis'), Element('rgvolume'), audio_sink)
 		
 		self.video_sink = Element(config.get('video-plugin','gconfvideosink'))
-		self.video_sink.set_property('force-aspect-ratio', True)
 		
 		self.player = Element('playbin')
 		self.player.set_property('audio-sink', self.audio_bin)
@@ -116,6 +116,7 @@ class Player(PObject):
 		self.bus.connect('message::error', self.on_error)
 		self.bus.connect('message::eos', self.on_eos)
 		self.bus.connect('message::tag', self.on_tag)
+		self.bus.connect('sync-message::element', self.on_sync_message)
 		self.connect('error', self.on_private_error)
 		
 		self.last_update = ()
@@ -141,6 +142,14 @@ class Player(PObject):
 			'mute':			self.mute,
 			'status':		self.status,
 		}
+		
+	def on_sync_message(self, bus, message):
+		debug('on_sync_message', message.structure.get_name(), message.src)
+		if message.structure.get_name() == 'prepare-xwindow-id':
+			message.src.set_property('force-aspect-ratio', True)
+			with gtk.gdk.lock:
+				message.src.set_xwindow_id(self._window.window.xid)
+		return True
 		
 	def on_set_library(self, library):
 		self.lib = library
@@ -219,13 +228,15 @@ class Player(PObject):
 				self._window.disconnect(h)
 		self._window = w
 		self._window_handlers = (
-			self._window.connect('expose-event', self.refresh_xid),
-			self._window.connect('configure-event', self.refresh_xid),
+			self._window.connect('expose-event', self.expose),
+			#self._window.connect('configure-event', self.expose),
+			#self._window.connect('realize', self.expose),
 		)
 		
-	def refresh_xid(self, widget=None, event=None):
-		if self._window is not None:
-			self.video_sink.set_xwindow_id(self._window.window.xid)
+	def expose(self, widget=None, event=None):
+		debug('expose')
+		vs = self.player.get_property('video-sink')
+		vs.expose()
 		
 	def seek(self, new, absolute=True):
 		'''seek(new_position, absolute=True) -> None
@@ -364,7 +375,6 @@ Move playback to the next item in the playlist.'''
 		injected = ','.join(['%s=%s' % (k.replace('_','-'),tags[k]) for k in rgtags if tags[k]])
 		debug('Injecting tags', injected)
 		self.taginject.props.tags = injected
-		self.refresh_xid()
 		
 	def scan_uri(self, uri):
 		tags = self.tagger(uri, normalize=False)
