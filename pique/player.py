@@ -123,7 +123,8 @@ class Player(PObject):
 		self.last_error = None
 		self.state_change_pending = threading.Lock()
 		self.state_change_done = threading.Event()
-		self.updatethread = PlayThread(lambda:self.emit('update', self.get_position(), self.get_duration()), 0.1)
+		#self.updatethread = PlayThread(lambda:self.emit('update', self.get_position(), self.get_duration()), 0.1)
+		self.updatethread = PlayThread(self.emit_update, 0.1)
 		
 		self.tagger = tag_reader()
 		
@@ -142,6 +143,10 @@ class Player(PObject):
 			'mute':			self.mute,
 			'status':		self.status,
 		}
+		
+	def emit_update(self):
+		p, d = self.get_position(), self.get_duration()
+		self.emit('update', p, d)
 		
 	def on_sync_message(self, bus, message):
 		debug('on_sync_message', message.structure.get_name(), message.src)
@@ -369,6 +374,7 @@ Move playback to the next item in the playlist.'''
 			
 	def load(self, uri):
 		debug('load', uri)
+		self.emit_update()
 		tags = self.lib[uri]
 		self.player.set_property('uri', uri)
 		rgtags = 'replaygain_reference_level','replaygain_track_gain','replaygain_track_peak'

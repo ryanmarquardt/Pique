@@ -38,7 +38,7 @@ class BgThread(threading.Thread):
 				self.main(*args)
 		else:
 			t = self.main
-		threading.Thread.__init__(self, target=self.main, args=args, kwargs=kwargs)
+		threading.Thread.__init__(self, target=t, args=args, kwargs=kwargs)
 		self.daemon = True
 		self.init()
 		
