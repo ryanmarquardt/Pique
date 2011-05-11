@@ -191,7 +191,7 @@ class Response(RPC):
 		for node in self.doc.documentElement.childNodes:
 			handle = str(node.getAttribute('handle'))
 			resp = node.nodeName
-			payload = Transform.to_native(getFirstChildElement(node))
+			payload = Transform.to_native(node.firstChild)
 			if resp == 'return':
 				yield handle, payload
 			elif resp == 'error':
