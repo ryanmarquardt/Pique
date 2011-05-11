@@ -123,7 +123,7 @@ class Player(PObject):
 		self.last_error = None
 		self.state_change_pending = threading.Lock()
 		self.state_change_done = threading.Event()
-		#self.updatethread = PlayThread(lambda:self.emit('update', self.get_position(), self.get_duration()), 0.1)
+		self.seek_pending = threading.Lock()
 		self.updatethread = PlayThread(self.emit_update, 0.1)
 		
 		self.tagger = tag_reader()
@@ -175,7 +175,7 @@ class Player(PObject):
 	def on_tag(self, bus, message):
 		taglist = message.parse_tag()
 		uri = self.player.get_property('uri')
-		tags = dict((k.replace('-','_'),convert(taglist[k])) for k in taglist.keys())
+		tags = dict((k,convert(taglist[k])) for k in taglist.keys())
 		self.emit('new-tags', uri, tags)
 			
 	def on_playlist_new_uri(self, uri):
@@ -239,7 +239,6 @@ class Player(PObject):
 		)
 		
 	def expose(self, widget=None, event=None):
-		debug('expose')
 		vs = self.player.get_property('video-sink')
 		vs.expose()
 		
@@ -249,11 +248,17 @@ class Player(PObject):
 Move playback to a different point. If absolute is True, new_position is the
 location to continue playback. If absolute is False, new_position is the
 number of seconds forward or backward to move.'''
-		new *= SECOND
-		if not absolute:
-			new = max(0, new + self.get_position())
-		debug('seek', new)
-		self.player.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, new)
+		if self.seek_pending.acquire(False):
+			try:
+				new *= SECOND
+				if not absolute:
+					new = max(0, new + self.get_position())
+				debug('seek', new)
+				self.player.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, new)
+			finally:
+				self.seek_pending.release()
+		else:
+			debug('seek skipped')
 		
 	def status(self):
 		'''status() -> Dict
@@ -375,10 +380,10 @@ Move playback to the next item in the playlist.'''
 	def load(self, uri):
 		debug('load', uri)
 		self.emit_update()
-		tags = self.lib[uri]
 		self.player.set_property('uri', uri)
-		rgtags = 'replaygain_reference_level','replaygain_track_gain','replaygain_track_peak'
-		injected = ','.join(['%s=%s' % (k.replace('_','-'),tags[k]) for k in rgtags if tags[k]])
+		rgkeys = 'replaygain-reference-level','replaygain-track-gain','replaygain-track-peak'
+		rgtags = [(k,self.lib[uri].get(k,None)) for k in rgkeys]
+		injected = ','.join(['%s=%s' % (k,v) for k,v in rgtags if v])
 		debug('Injecting tags', injected)
 		self.taginject.props.tags = injected
 		
@@ -440,7 +445,6 @@ class tag_reader(object):
 				if msg is None:
 					if update_callback:
 						update_callback()
-					continue
 				elif msg.type & gst.MESSAGE_EOS:
 					break
 				elif not normalize and msg.type & gst.MESSAGE_ASYNC_DONE:
@@ -450,8 +454,7 @@ class tag_reader(object):
 				elif msg.type & gst.MESSAGE_TAG:
 					taglist = msg.parse_tag()
 					for k in taglist.keys():
-						k,v = k.replace('-','_'),convert(taglist[k])
-						tags[k] = v
+						tags[k] = convert(taglist[k])
 			tags['duration'] = self.playbin.query_duration(gst.FORMAT_TIME, None)[0]
 		except Exception, e:
 			raise e

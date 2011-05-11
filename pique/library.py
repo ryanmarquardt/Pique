@@ -269,7 +269,7 @@ job id number.'''
 
 Searches the library for media with the associated metadata. find returns
 a list of uris where table 'column' has 'value'.'''
-		return sorted([uri for (uri,entry) in self.db.iteritems() if entry.get(column, None) == what])
+		return sorted([uri for (uri,entry) in self.db.iteritems() if entry.get(column) == what])
 		
 	def edit(self, uri, key, value=None):
 		'''edit(uri, column, value=None) -> Dict
@@ -297,8 +297,8 @@ Returns a list of all unique entries in column.'''
 			return sorted(self.db.keys())
 		else:
 			values = set()
-			for entry in self.db:
-				values.add(entry.get(column,None))
+			for uri in self.db:
+				values.add(self.db[uri].get(column))
 			return sorted(list(values))
 
 if __name__=='__main__':
