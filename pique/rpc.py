@@ -21,28 +21,6 @@ except ImportError:
 
 impl = xml.dom.getDOMImplementation()
 
-type_map = {
-	bool:'bool', int:'int', long:'long', float:'float',
-	complex:'complex',
-	str:'str', unicode:'unicode', bytearray:'bytearray',
-	list:'list', tuple:'tuple',
-	dict:'dict', set:'set', frozenset:'frozenset',
-	'bool':bool, 'int':int, 'long':long, 'float':float,
-	'complex':complex,
-	'str':str, 'unicode':unicode, 'bytearray':bytearray,
-	'list':list, 'tuple':tuple,
-	'dict':dict, 'set':set, 'frozenset':frozenset,
-}
-
-def get_type(obj):
-	for t in obj.__class__.mro():
-		if t in type_map:
-			break
-	return type_map[t]
-	
-def type_from_name(name):
-	return type_map[name]
-	
 class func_def(object):
 	def __init__(self, name, *args, **kwargs):
 		self.name = str(name)
@@ -54,41 +32,87 @@ class func_def(object):
 		
 	def __str__(self):
 		items = map(repr,self.args) + map(lambda i:'%s=%r'%i, self.kwargs.items())
-		return '%s(%s)' % (self.name, (', '.join(items)))
-	__repr__ = __str__
+		return '%s(%s)' % (self.name, ', '.join(items))
+	def __repr__(self):
+		items = map(repr,self.args) + map(lambda i:'%s=%r'%i, self.kwargs.items())
+		return 'func_def(%r, %s)' % (self.name, ', '.join(items))
 
-def build_xmlobjtree(doc, obj):
-	if obj is None: return doc.createElement('null')
-	elif obj is True: return doc.createElement('true')
-	elif obj is False: return doc.createElement('false')
-	t = get_type(obj)
-	node = doc.createElement(t)
-	if t in ('list','tuple','set','frozenset'):
-		for e in obj:
-			node.appendChild(build_xmlobjtree(doc, e))
-	elif t == 'dict':
-		for k,v in obj.iteritems():
-			item = doc.createElement('item')
-			item.appendChild(build_xmlobjtree(doc, k))
-			item.appendChild(build_xmlobjtree(doc, v))
-			node.appendChild(item)
-	else:
-		node.appendChild(doc.createTextNode(unicode(obj)))
-	return node
+class DeepXMLTransform(object):
+	type_map = {
+		bool:'bool', int:'int', long:'long', float:'float',
+		complex:'complex',
+		str:'str', unicode:'unicode', bytearray:'bytearray',
+		list:'list', tuple:'tuple',
+		dict:'dict', set:'set', frozenset:'frozenset',
+		'bool':bool, 'int':int, 'long':long, 'float':float,
+		'complex':complex,
+		'str':str, 'unicode':unicode, 'bytearray':bytearray,
+		'list':list, 'tuple':tuple,
+		'dict':dict, 'set':set, 'frozenset':frozenset,
+	}
 	
-def eval_xmlobjtree(node):
-	t = node.nodeName
-	if t == 'null': return None
-	elif t == 'true': return True
-	elif t == 'false': return False
-	t = type_from_name(t)
-	if t in (list,tuple,set,frozenset):
-		return t(eval_xmlobjtree(n) for n in node.childNodes if n.nodeType == n.ELEMENT_NODE)
-	elif t == dict:
-		return dict((eval_xmlobjtree(getFirstChildElement(n)),eval_xmlobjtree(getNextSiblingElement(getFirstChildElement(n)))) for n in node.childNodes if n.nodeType == n.ELEMENT_NODE)
-	else:
-		return t(node.firstChild.data)
+	@classmethod
+	def get_type(cls, obj):
+		for t in obj.__class__.mro():
+			if t in cls.type_map:
+				break
+		return cls.type_map[t]
 	
+	@classmethod
+	def type_from_name(cls, name):
+		return cls.type_map[name]
+	
+	@classmethod
+	def from_native(self, doc, obj):
+		if obj is None: return doc.createElement('null')
+		elif obj is True: return doc.createElement('true')
+		elif obj is False: return doc.createElement('false')
+		elif isinstance(obj, func_def):
+			node = doc.createElement('func')
+			node.appendChild(self.from_native(doc, obj.__dict__))
+			return node
+		t = self.get_type(obj)
+		node = doc.createElement(t)
+		if t in ('list','tuple','set','frozenset'):
+			for e in obj:
+				node.appendChild(self.from_native(doc, e))
+		elif t == 'dict':
+			for k,v in obj.iteritems():
+				item = doc.createElement('item')
+				item.appendChild(self.from_native(doc, k))
+				item.appendChild(self.from_native(doc, v))
+				node.appendChild(item)
+		else:
+			node.appendChild(doc.createTextNode(unicode(obj)))
+		return node
+	
+	@classmethod
+	def to_native(self, node):
+		t = node.nodeName
+		if t == 'null': return None
+		elif t == 'true': return True
+		elif t == 'false': return False
+		elif t == 'func':
+			d = self.to_native(getFirstChildElement(node))
+			return func_def(d['name'], *d['args'], **d['kwargs'])
+		t = self.type_from_name(t)
+		if t in (list,tuple,set,frozenset):
+			return t(self.to_native(n) for n in node.childNodes if n.nodeType == n.ELEMENT_NODE)
+		elif t == dict:
+			return dict((self.to_native(getFirstChildElement(n)),self.to_native(getNextSiblingElement(getFirstChildElement(n)))) for n in node.childNodes if n.nodeType == n.ELEMENT_NODE)
+		else:
+			return t(node.firstChild.data)
+
+class ReprTransform(object):
+	def from_native(self, doc, obj):
+		return doc.createTextNode(repr(obj))
+		
+	def to_native(self, node):
+		return eval(node.data)
+
+Transform = DeepXMLTransform()
+Transform = ReprTransform()
+
 class RPC(object):
 	Caps = {
 		'compression': [],
@@ -140,34 +164,19 @@ class Request(RPC):
 	_root_name = 'request'
 	def __iter__(self):
 		for node in self.doc.documentElement.childNodes:
-			handle = str(node.getAttribute('handle'))
-			func = func_def(node.getAttribute('function'))
-			for child in node.childNodes:
-				if child.nodeType == node.ELEMENT_NODE:
-					grandchild = getFirstChildElement(child)
-					if child.nodeName == 'arg':
-						func.args.append(eval_xmlobjtree(grandchild))
-					if child.nodeName == 'kwarg':
-						key = eval_xmlobjtree(grandchild)
-						func.kwargs[key] = eval_xmlobjtree(getNextSiblingElement(grandchild))
-			yield (handle, func)
+			if node.nodeName == 'call':
+				handle = str(node.getAttribute('handle'))
+				child = node.firstChild
+				func = Transform.to_native(child)
+				yield (handle, func)
 		
 	def append(self, func):
 		node = self.doc.createElement('call')
 		iden = '%08x' % random.getrandbits(32)
 		iden += time.strftime('%Y%m%d%H%M%S',time.gmtime())
 		iden += repr(func)
-		node.setAttribute('function', func.name)
 		node.setAttribute('handle', hashlib.md5(iden).hexdigest())
-		for arg in func.args:
-			a = self.doc.createElement('arg')
-			a.appendChild(build_xmlobjtree(self.doc, arg))
-			node.appendChild(a)
-		for key in func.kwargs:
-			a = self.doc.createElement('kwarg')
-			a.appendChild(build_xmlobjtree(self.doc, key))
-			a.appendChild(build_xmlobjtree(self.doc, func.kwargs[key]))
-			node.appendChild(a)
+		node.appendChild(Transform.from_native(self.doc, func))
 		self.doc.documentElement.appendChild(node)
 	
 class Response(RPC):
@@ -175,14 +184,14 @@ class Response(RPC):
 	def append(self, handle, typ, payload):
 		node = self.doc.createElement(typ)
 		node.setAttribute('handle', handle)
-		node.appendChild(build_xmlobjtree(self.doc, payload))
+		node.appendChild(Transform.from_native(self.doc, payload))
 		self.doc.documentElement.appendChild(node)
 		
 	def __iter__(self):
 		for node in self.doc.documentElement.childNodes:
 			handle = str(node.getAttribute('handle'))
 			resp = node.nodeName
-			payload = eval_xmlobjtree(getFirstChildElement(node))
+			payload = Transform.to_native(getFirstChildElement(node))
 			if resp == 'return':
 				yield handle, payload
 			elif resp == 'error':
