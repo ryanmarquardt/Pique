@@ -264,12 +264,12 @@ job id number.'''
 		#self.jobsmanager.submit(self.player.normalize_uri, path)
 		return r
 		
-	def find(self, column, what):
-		'''find(column, value) -> List
+	def find(self, column, *what):
+		'''find(column, value[, value, ...]) -> List
 
 Searches the library for media with the associated metadata. find returns
 a list of uris where table 'column' has 'value'.'''
-		return sorted([uri for (uri,entry) in self.db.iteritems() if entry.get(column) == what])
+		return sorted([uri for (uri,entry) in self.db.iteritems() if entry.get(column) in what])
 		
 	def edit(self, uri, key, value=None):
 		'''edit(uri, column, value=None) -> Dict

@@ -69,11 +69,11 @@ Returns a list of all uris in the playlist.'''
 Appends uri to the playlist.'''
 		self.load(self.entries + (uri,))
 		
-	def findadd(self, type, what):
+	def findadd(self, type, *what):
 		'''findadd(column, value) -> None
 
 Adds all media from the library where 'column' has 'value'.'''
-		uris = self.library.find(type, what)
+		uris = self.library.find(type, *what)
 		self.load(self.entries + tuple(uris))
 		
 	def _extend(self):
