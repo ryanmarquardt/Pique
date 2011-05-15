@@ -51,10 +51,8 @@ class ConsoleThread(bgthread.BgThread):
 					self.handler(key)
 				except BaseException, e:
 					debug(traceback.format_exc(e))
-		except KeyboardInterrupt:
-			self.handler('quit')
 		finally:
-			print 'done'
+			self.handler('quit')
 		
 	def quit(self):
 		self.rawtty.restore()

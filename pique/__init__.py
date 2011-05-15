@@ -102,13 +102,10 @@ Returns a list of all available commands.'''
 	def __missing__(self, name):
 		path = self.conf.get('Plugins', name)
 		debug('Load plugin', name, '(%s)' % path)
-		plugin_class = importfrom(path)
-		items = self.conf.items(name)
-		plugin = plugin_class(items)
+		plugin = importfrom(path)(self.conf.items(name))
 		self[name] = plugin
 		commandmap = self['commandmap']
 		for cmd,func in getattr(plugin, 'commands', {}).items():
-			#Set commands
 			if commandmap.setdefault(cmd, func) is not func:
 				raise PluginError('Name conflict: %s is attempting to overwrite command %s' % (plugin_class.__name__, cmd))
 		for which, callback in getattr(plugin, 'dependencies', {}).items():

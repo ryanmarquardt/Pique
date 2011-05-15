@@ -401,18 +401,18 @@ def gsub(func):
 	def f(args,kwargs):
 		try:
 			r = func(*args, **kwargs)
-		except Exception, e:
-			q.put(e)
+		except BaseException, e:
+			q.put((None,e))
 		else:
-			q.put(r)
+			q.put((r,None))
 		finally:
 			main.quit()
 	def g(*args, **kwargs):
 		gobject.idle_add(f, args, kwargs)
 		main.run()
-		r = q.get()
-		if isinstance(r, Exception):
-			raise r
+		r,e = q.get()
+		if e:
+			raise e
 		else:
 			return r
 	return g
@@ -456,8 +456,6 @@ class tag_reader(object):
 					for k in taglist.keys():
 						tags[k] = convert(taglist[k])
 			tags['duration'] = self.playbin.query_duration(gst.FORMAT_TIME, None)[0]
-		except Exception, e:
-			raise e
 		finally:
 			self.playbin.set_state('null')
 		return tags
