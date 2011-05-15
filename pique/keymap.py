@@ -33,6 +33,7 @@ class KeyMap(dict):
 	dependencies = ('commandmap',)
 	def __init__(self, items):
 		self.keys = dict((str(k).lower(),v) for k,v in items)
+		self.failures = set()
 		self.dependencies = {'commandmap': self.on_set_commandmap}
 	
 	def on_set_commandmap(self, commandmap):
@@ -51,4 +52,6 @@ class KeyMap(dict):
 				func = self.commandmap[key]
 				return func()
 			except KeyError:
-				debug('No key binding for', repr(key))
+				if key not in self.failures:
+					self.failures.add(key)
+					debug('No key binding for', repr(key))
