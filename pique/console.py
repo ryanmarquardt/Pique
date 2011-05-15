@@ -42,11 +42,7 @@ class ConsoleThread(bgthread.BgThread):
 		self.handler = keymap.interpret
 		
 	def init(self):
-		self.rawtty = rawtty.rawtty(timeout=0.3, quit='eof')
-		
-	def start(self):
-		self.rawtty.start()
-		bgthread.BgThread.start(self)
+		self.rawtty = rawtty.threadtty(timeout=0.1, quit='<control>d')
 	
 	def main(self, confitems):
 		try:

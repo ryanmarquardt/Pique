@@ -27,91 +27,139 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import collections
 import Queue
-import select
 import signal
 import sys
 import termios
 import threading
 
-ESCAPE = '\x1b'
+MODS = (
+	(';2','<shift>'),
+	(';3','<alt>'),
+	(';4','<shift><alt>'),
+	(';5','<control>'),
+	(';6','<shift><control>'),
+	(';7','<control><alt>'),
+	(';8','<control><shift><alt>'),
+)
 
-NAMES = {
-	'escape':'\x1b',
-	'eof':'\x04',
-	'left':'\x1b[D',	'shift+left':'\x1b[1;2D',
-	'right':'\x1b[C',	'shift+right':'\x1b[1;2C',
-	'down':'\x1b[B',	'shift+down':'\x1b[1;2B',
-	'up':'\x1b[A',	'shift+up':'\x1b[1;2A',
-	'home':'\x1bOH',
-	'end':'\x1bOF',
-	'insert':'\x1b[2~',	'shift+insert':'\x1b[2;2~',
-	'delete':'\x1b[3~',	'shift+delete':'\x1b[3;2~',
-	'page_up':'\x1b[5~',
-	'page_down':'\x1b[6~',
-	'f1':'\x1bOP',	'shift+f1':'\x1bO1;2P',
-	'f2':'\x1bOQ',	'shift+f2':'\x1bO1;2Q',
-	'f3':'\x1bOR',	'shift+f3':'\x1bO1;2R',
-	'f4':'\x1bOS',	'shift+f4':'\x1bO1;2S',
-	'f5':'\x1b[15~',	'shift+f5':'\x1b[15;2~',
-	'f6':'\x1b[17~',	'shift+f6':'\x1b[17;2~',
-	'f7':'\x1b[18~',	'shift+f7':'\x1b[18;2~',
-	'f8':'\x1b[19~',	'shift+f8':'\x1b[19;2~',
-	'f9':'\x1b[20~',	'shift+f9':'\x1b[20;2~',
-	'f10':'\x1b[21~',	'shift+f10':'\x1b[21;2~',
-	'f11':'\x1b[23~',	'shift+f11':'\x1b[23;2~',
-	'f12':'\x1b[24~',	'shift+f12':'\x1b[24;2~',
-	'bksp':'\x7f',
-	'tab':'\t',	'shift+tab':'\x1b[Z',
-	'enter':'\n',
-	'space':' ',
+Sequences = {
+	'\x1b[D': 'left',
+	'\x1b[C': 'right',
+	'\x1b[B': 'down',
+	'\x1b[A': 'up',
+	'\x1b[2~': 'insert',
+	'\x1b[3~': 'delete',
+	'\x1b[5~': 'page_up',
+	'\x1b[6~': 'page_down',
+	'\x1bOP': 'f1',
+	'\x1bOQ': 'f2',
+	'\x1bOR': 'f3',
+	'\x1bOS': 'f4',
+	'\x1b[15~': 'f5',
+	'\x1b[17~': 'f6',
+	'\x1b[18~': 'f7',
+	'\x1b[19~': 'f8',
+	'\x1b[20~': 'f9',
+	'\x1b[21~': 'f10',
+	'\x1b[23~': 'f11',
+	'\x1b[24~': 'f12',
 }
-for k,v in NAMES.items():
-	NAMES[v] = k
-KNOWN_SEQUENCES = NAMES.values()
+for k,v in Sequences.items():
+	pre,post = k[:-1],k[-1]
+	if pre[-1] == '[':
+		pre += '1'
+	for n,t in MODS:
+		Sequences[pre+n+post] = t + v
+
+for c in range(1,27):
+	Sequences[chr(c)] = '<control>' + chr(c + ord('a') - 1)
+
+Sequences.update({
+	'\x1b': 'escape',
+	'\x1bOH': 'home',
+	'\x1bOF': 'end',
+	'\x7f': 'bksp',
+	'\t': 'tab',
+	'\x1b[Z': '<shift>tab',
+	'\n': 'enter',
+	'\r': 'linefeed',
+})
 	
-class EOF(Exception):
-	pass
+class EOF(Exception): pass
+class TimedOut(Exception): pass
 	
-class rawtty(object):
-	def __init__(self, fd=sys.stdin, echo=False, timeout=1, quit='eof'):
-		self.fd = fd
-		self.echo = echo
+class ALARM(object):
+	def __init__(self, handler, timeout):
 		self.timeout = timeout
-		self.quit = quit
-		self.old = termios.tcgetattr(self.fd.fileno())
-		self.q = Queue.Queue()
+		signal.signal(signal.SIGALRM, handler)
 		
 	def __enter__(self):
-		self.start()
+		signal.setitimer(signal.ITIMER_REAL, self.timeout)
 		
 	def __exit__(self, type, value, traceback):
-		self.restore()
+		signal.setitimer(signal.ITIMER_REAL, 0)
 		
-	def start(self):
-		try:
-			signal.signal(signal.SIGINT, self._recv_interrupt)
-		except:
-			pass
+class basetty(object):
+	def __init__(self, names=Sequences, fd=sys.stdin, echo=False, quit=None):
+		self.fd = fd
+		self.old = termios.tcgetattr(self.fd.fileno())
+		self.echo = echo
+		self.names = names
+		self.quit = quit
+		
+	def __enter__(self):
 		new = termios.tcgetattr(self.fd.fileno())
 		new[3] &= ~termios.ICANON 
 		if not self.echo:
 			new[3] &= ~termios.ECHO
 		termios.tcsetattr(self.fd.fileno(), termios.TCSANOW, new)
 		
-	def restore(self):
+	def __exit__(self, type, value, traceback):
 		termios.tcsetattr(self.fd.fileno(), termios.TCSADRAIN, self.old)
-		try:
-			signal.signal(signal.SIGINT, signal.SIG_DFL)
-		except:
-			pass
-		
-	def _recv_interrupt(self, sig, frame):
-		self.q.put(KeyboardInterrupt)
 		
 	def __iter__(self):
-		self.start()
+		with self:
+			extra = ''
+			keys = self.names.keys()
+			while True:
+				seq, extra = extra, ''
+				possible = filter(lambda x:x.startswith(seq), keys)
+				try:
+					while possible and possible != [seq]:
+						seq += self._getch()
+						possible = filter(lambda x:x.startswith(seq), possible)
+				except TimedOut:
+					pass
+				if not possible and len(seq) > 1:
+					seq, extra = seq[:-1], seq[-1]
+				if seq:
+					yield self.names.get(seq,seq)
+					if self.quit and seq == self.quit:
+						raise EOF
+						
+class signaltty(basetty):
+	def __init__(self, *args, **kwargs):
+		timeout = kwargs.pop('timeout', 0.1)
+		basetty.__init__(self, *args, **kwargs)
+		def handler(signum, frame):
+			raise TimedOut
+		self.alarm = ALARM(handler, timeout)
+		
+	def _getch(self):
+		with self.alarm:
+			c = self.fd.read(1)
+		if c:
+			return c
+		else:
+			raise EOF
+			
+class threadtty(basetty, threading.Thread):
+	def __init__(self, *args, **kwargs):
+		self.timeout = kwargs.pop('timeout', 0.1)
+		basetty.__init__(self, *args, **kwargs)
+		self.q = Queue.Queue()
+		signal.signal(signal.SIGINT, lambda s,f:self.q.put(None))
 		def readthread():
 			try:
 				c = True
@@ -120,56 +168,34 @@ class rawtty(object):
 					self.q.put(c)
 			finally:
 				self.q.put('')
-		self.readthread = threading.Thread(target=readthread)
-		self.readthread.daemon = True
-		self.readthread.start()
-		seq = self.q.get()
-		while True:
-			if not seq:
-				raise EOF
-			elif seq == KeyboardInterrupt:
-				raise KeyboardInterrupt
-			elif seq == ESCAPE:
-				try:
-					seq += self.q.get(timeout=self.timeout)
-				except Queue.Empty:
-					pass
-					#Assume that only escape was pressed
-				else:
-					if not any(s.startswith(seq) for s in KNOWN_SEQUENCES):
-						#Escape key, followed by another sequence
-						yield 'escape'
-						seq = seq[1:]
-						continue
-					else:
-						#Probably not the escape key by itself
-						#Continue reads until we have a full sequence or error
-						while any(s.startswith(seq) for s in KNOWN_SEQUENCES):
-							if seq not in KNOWN_SEQUENCES:
-								seq += self.q.get()
-							else:
-								break
-						if seq not in KNOWN_SEQUENCES:
-							#No match
-							raise IOError('Unrecognized Sequence %r' % seq)
-			if seq != NAMES.get(self.quit,self.quit):
-				yield NAMES.get(seq,seq)
-			else:
-				return
-			seq = self.q.get()
-
-def getch(fd=sys.stdin, echo=False):
-	with rawtty(fd):
-		return fd.read(1)
+		t = threading.Thread(target=readthread)
+		t.daemon = True
+		t.start()
 		
-if __name__=='__main__':
-	print KNOWN_SEQUENCES
-	while True:
+	def _getch(self):
 		try:
-			for key in keypresses():
-				print repr(key)
-		except IOError, e:
-			print e
-			break
+			c = self.q.get(timeout=self.timeout)
+		except Queue.Empty:
+			raise TimedOut
+		if c:
+			return c
+		elif c is None:
+			raise KeyboardInterrupt
 		else:
-			break
+			raise EOF
+	
+if __name__=='__main__':
+	rawtty = threadtty(Sequences, timeout=1)
+	def thrd():
+		try:
+			while True:
+				for key in rawtty:
+					print repr(key)
+		except KeyboardInterrupt:
+			print 'KeyboardInterrupt'
+	import threading
+	t = threading.Thread(target=thrd)
+	t.start()
+	import time
+	while t.is_alive():
+		time.sleep(1)
