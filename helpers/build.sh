@@ -52,6 +52,10 @@ case $1 in
 	deb)
 		deb $2
 		;;
+	local-install)
+		deb binary
+		sudo dpkg -i "dist/${PACKAGE_FULLNAME}_${PACKAGE_ARCH}.deb"
+		;;
 	run)
 		pack
 		unpack
