@@ -116,8 +116,7 @@ Returns a list of all available commands.'''
 		
 	def start(self):
 		for plugin in self.order:
-			if hasattr(plugin, 'start'):
-				plugin.start()
+			getattr(plugin, 'start', lambda:None)()
 		
 	def quit(self):
 		'''quit() -> None

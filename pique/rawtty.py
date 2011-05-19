@@ -102,21 +102,26 @@ class ALARM(object):
 		
 class basetty(object):
 	def __init__(self, names=Sequences, fd=sys.stdin, echo=False, quit=None):
+		try:
+			self.old = termios.tcgetattr(fd.fileno())
+		except termios.error:
+			self.old = None
 		self.fd = fd
-		self.old = termios.tcgetattr(self.fd.fileno())
 		self.echo = echo
 		self.names = names
 		self.quit = quit
 		
 	def __enter__(self):
-		new = termios.tcgetattr(self.fd.fileno())
-		new[3] &= ~termios.ICANON 
-		if not self.echo:
-			new[3] &= ~termios.ECHO
-		termios.tcsetattr(self.fd.fileno(), termios.TCSANOW, new)
+		if self.old:
+			new = termios.tcgetattr(self.fd.fileno())
+			new[3] &= ~termios.ICANON 
+			if not self.echo:
+				new[3] &= ~termios.ECHO
+			termios.tcsetattr(self.fd.fileno(), termios.TCSANOW, new)
 		
 	def __exit__(self, type, value, traceback):
-		termios.tcsetattr(self.fd.fileno(), termios.TCSADRAIN, self.old)
+		if self.old:
+			termios.tcsetattr(self.fd.fileno(), termios.TCSADRAIN, self.old)
 		
 	def __iter__(self):
 		with self:

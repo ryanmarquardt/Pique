@@ -383,7 +383,7 @@ Move playback to the next item in the playlist.'''
 		self.player.set_property('uri', uri)
 		rgkeys = 'replaygain-reference-level','replaygain-track-gain','replaygain-track-peak'
 		rgtags = [(k,self.lib[uri].get(k,None)) for k in rgkeys]
-		injected = ','.join(['%s=%s' % (k,v) for k,v in rgtags if v])
+		injected = ','.join(['='.join((k,str(v))) for k,v in rgtags if v])
 		debug('Injecting tags', injected)
 		self.taginject.props.tags = injected
 		
