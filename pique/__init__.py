@@ -34,6 +34,8 @@ import ConfigParser
 import os
 import signal
 import sys
+import traceback
+import Queue
 
 import gtk
 
@@ -75,13 +77,67 @@ class Configuration(ConfigParser.SafeConfigParser):
 			real_name = sections[lowersections.index(section)]
 		return ConfigParser.SafeConfigParser.items(self, real_name)
 
+class LockedValue(threading._Event):
+	def set(self, val):
+		self.value = val
+		threading._Event.set(self)
+		
+	def wait(self, timeout=None):
+		threading._Event.wait(self, timeout=timeout)
+		return self.value
+
+class CommandMap(threading.Thread, dict):
+	name = 'CommandThread'
+	def __init__(self, d=None):
+		threading.Thread.__init__(self)
+		dict.__init__(self, d)
+		self.daemon = True
+		self._q = Queue.Queue()
+		
+	def __hash__(self):
+		return 1
+		
+	def async(self, cmd, *args, **kwargs):
+		debug('self._q.put', cmd, args, kwargs)
+		self._q.put((cmd, args, kwargs, None))
+		
+	def __call__(self, cmd, *args, **kwargs):
+		debug('self._q.put', cmd, args, kwargs)
+		v = LockedValue()
+		self._q.put((cmd, args, kwargs, v))
+		exc,ret = v.wait()
+		if exc is None:
+			return ret
+		else:
+			raise exc
+		
+	def run(self):
+		while True:
+			val = self._q.get()
+			command, args, kwargs, v = val
+			try:
+				f = lambda:self[command](*args, **kwargs)
+				if v is None:
+					f()
+			except BaseException, e:
+				traceback.print_exc(e)
+			if not v is None:
+				try:
+					ret = f()
+					exc = None
+				except BaseException, exc:
+					ret = None
+				finally:
+					v.set((exc,ret))
+			
 class PluginManager(collections.defaultdict):
 	def __init__(self):
 		self.conf = Configuration()
-		self['commandmap'] = {
+		self['commandmap'] = CommandMap({
 			'quit': self.quit,
 			'commands': self.commands,
-		}
+		})
+		self['commandmap'].start()
 		self.order = collections.deque()
 		for name, _ in self.conf.items('Plugins'):
 			self[name]
@@ -145,8 +201,8 @@ class Main(object):
 	
 	def on_eos(self):
 		debug('eos')
-		self.plugins['commandmap']['next']()
+		self.plugins['commandmap'].async('next')
 		
 	def on_error(self, error):
 		debug('Error:', *error)
-		self.plugins['commandmap']['stop']()
+		self.plugins['commandmap'].async('stop')

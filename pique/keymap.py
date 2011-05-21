@@ -30,7 +30,7 @@
 from common import *
 
 class KeyMap(dict):
-	dependencies = ('commandmap',)
+	#dependencies = ('commandmap',)
 	def __init__(self, items):
 		self.keys = dict((str(k).lower(),v) for k,v in items)
 		self.failures = set()
@@ -45,12 +45,10 @@ class KeyMap(dict):
 	def interpret(self, key):
 		key = key.lower()
 		try:
-			func = self.commandmap[self.keys[key]]
-			return func()
+			return self.commandmap.async(self.keys[key])
 		except KeyError:
 			try:
-				func = self.commandmap[key]
-				return func()
+				return self.commandmap.async(key)
 			except KeyError:
 				if key not in self.failures:
 					self.failures.add(key)

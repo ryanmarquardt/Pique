@@ -27,7 +27,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import bgthread
-import rawtty
+from rawtty import EOF, threadtty as tty
 
 class ConsoleThread(bgthread.BgThread):
 	name = 'ConsoleThread'
@@ -42,7 +42,7 @@ class ConsoleThread(bgthread.BgThread):
 		self.handler = keymap.interpret
 		
 	def init(self):
-		self.rawtty = rawtty.threadtty(timeout=0.1, quit='<control>d')
+		self.rawtty = tty(timeout=0.1, quit='<control>d')
 	
 	def main(self, confitems):
 		try:
@@ -51,10 +51,8 @@ class ConsoleThread(bgthread.BgThread):
 					self.handler(key)
 				except BaseException, e:
 					debug(traceback.format_exc(e))
-		except rawtty.EOF:
-			pass
-		finally:
+		except (EOF, KeyboardInterrupt):
 			self.handler('quit')
 		
 	def quit(self):
-		self.rawtty.restore()
+		self.rawtty.__exit__(None, None, None)

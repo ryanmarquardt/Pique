@@ -84,6 +84,7 @@ Sequences.update({
 	'\x1b[Z': '<shift>tab',
 	'\n': 'enter',
 	'\r': 'linefeed',
+	' ': 'space',
 })
 	
 class EOF(Exception): pass
@@ -110,6 +111,8 @@ class basetty(object):
 		self.echo = echo
 		self.names = names
 		self.quit = quit
+		self.__setattr = termios.tcsetattr
+		self.__drain = termios.TCSADRAIN
 		
 	def __enter__(self):
 		if self.old:
@@ -121,7 +124,7 @@ class basetty(object):
 		
 	def __exit__(self, type, value, traceback):
 		if self.old:
-			termios.tcsetattr(self.fd.fileno(), termios.TCSADRAIN, self.old)
+			self.__setattr(self.fd.fileno(), self.__drain, self.old)
 		
 	def __iter__(self):
 		with self:
@@ -159,6 +162,7 @@ class signaltty(basetty):
 		else:
 			raise EOF
 			
+QueueEmpty = Queue.Empty
 class threadtty(basetty, threading.Thread):
 	def __init__(self, *args, **kwargs):
 		self.timeout = kwargs.pop('timeout', 0.1)
@@ -180,7 +184,7 @@ class threadtty(basetty, threading.Thread):
 	def _getch(self):
 		try:
 			c = self.q.get(timeout=self.timeout)
-		except Queue.Empty:
+		except QueueEmpty:
 			raise TimedOut
 		if c:
 			return c

@@ -59,13 +59,12 @@ class NetThread(rpc.ThreadingServer, bgthread.BgThread, PObject):
 			return None
 		elif name == 'quit':
 			rpc.ThreadingServer.shutdown(self)
-			self.commandmap['quit']()
+			self.commandmap.async('quit')
 		elif name == 'help':
 			return self.commandmap[args[0]].__doc__
 		else:
 			debug(name, args, kwargs)
-			func = self.commandmap[name]
-			return func(*args, **kwargs)
+			return self.commandmap(name, *args, **kwargs)
 			
 	def on_set_commandmap(self, commandmap):
 		self.commandmap = commandmap

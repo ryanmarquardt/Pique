@@ -122,7 +122,7 @@ class Player(PObject):
 		self.last_update = ()
 		self.last_error = None
 		self.state_change_pending = threading.Lock()
-		self.state_change_done = threading.Event()
+		self.state_change_done = threading.Condition()
 		self.seek_pending = threading.Lock()
 		self.updatethread = PlayThread(self.emit_update, 0.1)
 		
@@ -184,11 +184,13 @@ class Player(PObject):
 	def on_private_error(self, error):
 		debug('State Change Error')
 		self.last_error = Error(*error)
-		self.state_change_done.set()
+		with self.state_change_done:
+			self.state_change_done.notifyAll()
 		
 	def on_async_done(self, bus, message):
 		debug('State Change Finished')
-		self.state_change_done.set()
+		with self.state_change_done:
+			self.state_change_done.notifyAll()
 		self.last_error = None
 			
 	def on_state_changed(self, bus, message):
@@ -203,8 +205,7 @@ class Player(PObject):
 		self.emit('eos')
 		
 	def set_state(self, state):
-		with self.state_change_pending:
-			self.state_change_done.clear()
+		with self.state_change_done:
 			result = self.player.set_state(state)
 			debug('state change result =', result)
 			if result != gst.STATE_CHANGE_SUCCESS:
@@ -241,6 +242,9 @@ class Player(PObject):
 	def expose(self, widget=None, event=None):
 		vs = self.player.get_property('video-sink')
 		vs.expose()
+		
+	def seek_raw(self, new, absolute=True):
+		self.seek(new/SECOND, absolute=absolute)
 		
 	def seek(self, new, absolute=True):
 		'''seek(new_position, absolute=True) -> None

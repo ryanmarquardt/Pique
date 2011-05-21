@@ -32,6 +32,7 @@ from common import *
 import sys
 import thread
 import threading
+import Queue
 args, sys.argv = sys.argv, []
 
 import pygtk
@@ -71,6 +72,9 @@ class VideoBox(PObject, gtk.VBox):
 		self.volume.up = False
 		self.volume.get_child().unset_flags(gtk.CAN_FOCUS)
 		
+		self.settingsmenu = gtk.ToolButton(gtk.STOCK_PROPERTIES)
+		self.settingsmenu.get_child().unset_flags(gtk.CAN_FOCUS)
+		
 		self.buttons = gtk.Toolbar()
 		self.buttons.unset_flags(gtk.CAN_FOCUS)
 		self.buttons.set_orientation(gtk.ORIENTATION_HORIZONTAL)
@@ -80,6 +84,7 @@ class VideoBox(PObject, gtk.VBox):
 		self.buttons.insert(self.next, -1)
 		self.buttons.insert(self.slider, -1)
 		self.buttons.insert(self.volume, -1)
+		self.buttons.insert(self.settingsmenu, -1)
 		
 		self.tracklist_model = gtk.ListStore(str)
 		self.tracklist = gtk.TreeView(self.tracklist_model)
@@ -87,8 +92,12 @@ class VideoBox(PObject, gtk.VBox):
 		self.tracklist_model.append(('track 1',))
 		self.tracklist.append_column(gtk.TreeViewColumn('Title', gtk.CellRendererText(), text=0))
 		
-		self.menu = gtk.VBox()
-		self.menu.pack_end(self.tracklist)
+		self.menu = gtk.Menu()
+		for i,(title,cmd) in enumerate([('Play','play'), ('Pause','pause'), ('Quit','quit')]):
+			menuitem = gtk.MenuItem(title)
+			menuitem.show()
+			menuitem.connect('activate', self.on_menu_clicked, cmd)
+			self.menu.append(menuitem)
 		
 		#self.sidebar = gtk.HPaned()
 		#self.sidebar.pack1(self.menu)
@@ -104,6 +113,7 @@ class VideoBox(PObject, gtk.VBox):
 		self.next.connect('clicked', self.on_signal, 'next')
 		self.slider.get_child().connect('change-value', self.on_slider)
 		self.movie_window.connect('button-press-event', self.on_button_press_event)
+		self.settingsmenu.get_child().connect_object('event', self.on_show_menu, self.menu)
 		
 	def set_keymap(self, keymap):
 		debug('GUI Set Keymap')
@@ -113,10 +123,20 @@ class VideoBox(PObject, gtk.VBox):
 		self.movie_window.connect('key-press-event', self.on_keypress)
 		self.keymap = keymap
 		
+	def on_show_menu(self, widget, event):
+		if event.type == gtk.gdk.BUTTON_PRESS:
+			widget.popup(None, None, None, event.button, event.time)
+			return True
+		else:
+			return False
+		
 	def on_keypress(self, window, event):
 		modifiers = gtk.gdk.SHIFT_MASK | gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
 		accel = gtk.accelerator_name(event.keyval, event.state & modifiers)
 		self.keymap.interpret(accel)
+		
+	def on_menu_clicked(self, menu, cmd):
+		self.emit('menu', cmd)
 		
 	def on_button_press_event(self, window, event):
 		self.emit('clicked', window, event)
@@ -193,10 +213,6 @@ class GUI(gtk.Window):
 		self.player.window = self.videobox.movie_window
 		self.player.connect('state-changed', self.update_state)
 		self.player.connect('update', self.update_time)
-		self.videobox.connect('play-pause', thread.start_new_thread, self.player.play_pause, ())
-		self.videobox.connect('next', thread.start_new_thread, self.player.next, ())
-		self.videobox.connect('previous', thread.start_new_thread, self.player.previous, ())
-		self.videobox.connect('position', lambda x:thread.start_new_thread(self.player.seek,(x/SECOND,)))
 		self.stop = player.stop
 		#self.connect('volume', player.set_volume)
 		
@@ -204,7 +220,13 @@ class GUI(gtk.Window):
 		self.videobox.set_keymap(keymap)
 		
 	def on_set_commandmap(self, commandmap):
-		self.quit = commandmap['quit']
+		self.commandmap = commandmap
+		self.quit = self.commandmap['quit']
+		self.videobox.connect('play-pause', self.commandmap.async, 'play_pause')
+		self.videobox.connect('next', self.commandmap.async, 'next')
+		self.videobox.connect('previous', self.commandmap.async, 'previous')
+		self.videobox.connect('position', self.commandmap.async, 'seek_raw')
+		self.videobox.connect('menu', self.on_menu_clicked)
 		
 	def update_time(self, pos, dur):
 		self.videobox.update_time(pos, dur)
@@ -224,6 +246,9 @@ class GUI(gtk.Window):
 			self.show_menu()
 		elif event.type == gtk.gdk._2BUTTON_PRESS and event.button == 1:
 			self.toggle_fullscreen()
+			
+	def on_menu_clicked(self, command):
+		self.commandmap(command)
 	
 	def on_window_state_event(self, window, event):
 		if event.changed_mask & gtk.gdk.WINDOW_STATE_FULLSCREEN:
