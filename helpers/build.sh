@@ -1,15 +1,16 @@
 #!/bin/sh
-export PY_FULLNAME=$(python setup.py --fullname)
-export PACKAGE_NAME=$(python setup.py --name)
-export PACKAGE_VERSION=$(python setup.py --version)
-export PACKAGE_FULLNAME=${PACKAGE_NAME}_${PACKAGE_VERSION}
-export PACKAGE_ARCH=$(dpkg-architecture -qDEB_BUILD_ARCH)
+PYTHON=$(which python)
 DEBUILD=$(which debuild)
 SUBSHELL=${SHELL:-/bin/bash}
 RM=$(which rm)
-PYTHON=$(which python)
 TAR=$(which tar)
 DPUT=$(which dput)
+
+export PY_FULLNAME=$($PYTHON setup.py --fullname)
+export PACKAGE_NAME=$($PYTHON setup.py --name)
+export PACKAGE_VERSION=$($PYTHON setup.py --version)
+export PACKAGE_FULLNAME=${PACKAGE_NAME}_${PACKAGE_VERSION}
+export PACKAGE_ARCH=$(dpkg-architecture -qDEB_BUILD_ARCH)
 
 verbose () { echo BUILD.SH "$@" >&2 ; "$@" ; }
 indir () { ( cd "$1" ; shift ; "$@" ) ; }
@@ -24,7 +25,7 @@ unpack () {
 debuild () { unpack; indir "dist/${PY_FULLNAME}" "$DEBUILD" "$@" ; }
 
 deb () {
-    ARCH=source
+	ARCH=source
 	case $1 in
 		source)
 			debuild -S -sa
@@ -34,15 +35,15 @@ deb () {
 			;;
 		binary)
 			debuild
-            ARCH=${PACKAGE_ARCH}
+			ARCH=${PACKAGE_ARCH}
 			;;
 		*)
 			echo "Unknown architecture:" $1
-            echo "Try one of:" source source-diff binary
+			echo "Try one of:" source source-diff binary
 			exit 2
 			;;
 	esac
-    echo ${PACKAGE_FULLNAME}_${ARCH}.deb
+	echo ${PACKAGE_FULLNAME}_${ARCH}.deb
 }
 
 case $1 in
@@ -84,7 +85,7 @@ case $1 in
 		;;
 	*)
 		echo "Unknown Command:" $1
-        echo "Try one of:" source deb run
+		echo "Try one of:" source deb local-install run ppa
 		exit 1
 		;;
 esac
