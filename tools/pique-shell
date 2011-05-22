@@ -48,8 +48,8 @@ parser.add_option('-v', '--verbose', dest='verbose', action='store_true',
   help='Display extra information')
 
 options, args = parser.parse_args()
-if options.interactive and '-' in args:
-	parser.error("Can't use interactive mode and standard input together")
+if options.interactive and ('-' in args or not sys.stdin.isatty()):
+	parser.error("Interactive mode requires standard input to be a terminal.")
 
 if options.verbose:
 	def debug(*args):
@@ -117,7 +117,6 @@ serv.connect(options.host, options.port)
 
 prompt = '(pique)%s: ' % options.host
 history = os.path.expanduser('~/.config/pique/shell_history')
-#source = (args,) if args else shell(prompt, history_file=history)
 
 class CommandFile(object):
 	def __init__(self, command):
@@ -139,10 +138,13 @@ for a in args:
 	else:
 		sources.append(open(a, 'r'))
 		
-if not sources or (options.interactive and sys.stdin not in sources):
+if sys.stdin.isatty() and (not sources or (options.interactive and sys.stdin not in sources)):
 	#Interactive mode
-	debug('Using interactive mode:', 'No other sources.' if not sources else 'Interactive flag set.')
+	debug('Using interactive mode:', 'Interactive flag set.' if options.interactive else 'No other sources.')
 	sources.append(shell(prompt, history_file=history))
+
+if not sources:
+	sources.append(sys.stdin)
 
 for source in sources:
 	with source:
