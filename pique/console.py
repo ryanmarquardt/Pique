@@ -52,7 +52,7 @@ class ConsoleThread(bgthread.BgThread):
 				except BaseException, e:
 					debug(traceback.format_exc(e))
 		except (EOF, KeyboardInterrupt):
-			self.handler('quit')
+			self.handler('eof')
 		
 	def quit(self):
 		self.rawtty.__exit__(None, None, None)

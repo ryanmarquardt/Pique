@@ -33,6 +33,7 @@ class KeyMap(dict):
 	#dependencies = ('commandmap',)
 	def __init__(self, items):
 		self.keys = dict((str(k).lower(),v) for k,v in items)
+		self.keys['eof'] = 'quit'
 		self.failures = set()
 		self.dependencies = {'commandmap': self.on_set_commandmap}
 	
@@ -45,11 +46,13 @@ class KeyMap(dict):
 	def interpret(self, key):
 		key = key.lower()
 		try:
-			return self.commandmap.async(self.keys[key])
+			cmd = self.keys[key]
 		except KeyError:
+			if key not in self.failures:
+				self.failures.add(key)
+				debug('No key binding for', repr(key))
+		else:
 			try:
-				return self.commandmap.async(key)
+				self.commandmap.async(cmd)
 			except KeyError:
-				if key not in self.failures:
-					self.failures.add(key)
-					debug('No key binding for', repr(key))
+				debug('Unknown command:', cmd, repr(key))
