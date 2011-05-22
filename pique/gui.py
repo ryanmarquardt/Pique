@@ -285,7 +285,7 @@ class GUI(gtk.Window):
 	def on_movie_window_clicked(self, window, event):
 		debug(event.type, event.button)
 		if event.type == gtk.gdk.BUTTON_PRESS and event.button == 3:
-			self.show_menu(event)
+			self.videobox.popup_menu(event)
 		elif event.type == gtk.gdk._2BUTTON_PRESS and event.button == 1:
 			self.toggle_fullscreen()
 			
