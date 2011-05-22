@@ -136,6 +136,11 @@ class Player(PObject):
 			'stop':			self.stop,
 			'previous':		self.previous,
 			'seek':			self.seek,
+			'beginning':	self.beginning,
+			'back_near':	self.back_near,
+			'back_far':		self.back_far,
+			'forward_near':	self.forward_near,
+			'forward_far':	self.forward_far,
 			'set_volume':	self.set_volume,
 			'get_volume':	self.get_volume,
 			'volume_up':	self.volume_up,
@@ -260,6 +265,21 @@ number of seconds forward or backward to move.'''
 				self.seek_pending.release()
 		else:
 			debug('seek skipped')
+			
+	def beginning(self):
+		self.seek(0)
+			
+	def back_near(self):
+		self.seek(-15, False)
+		
+	def back_far(self):
+		self.seek(-60, False)
+		
+	def forward_near(self):
+		self.seek(15, False)
+		
+	def forward_far(self):
+		self.seek(60, False)
 		
 	def status(self):
 		'''status() -> Dict
