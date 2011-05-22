@@ -1,3 +1,17 @@
+pique (0.02.4) maverick; urgency=low
+
+  * Changed pique-shell command line format to more closely match other
+    shells
+  * Added several previously unavailable seeking commands
+  * Exceptions raised in command thread pass back all exception info
+    (including proper traceback)
+  * Fixed VideoBox to accept button presses
+  * Major gui update, including menu and sidebar
+  * Complete rewrite of rawtty, commandmap
+  * Made rpc.py more modular and efficient
+
+ -- Ryan Marquardt (orbnauticus) <ryan.marquardt@gmail.com>  Mon, 23 May 2011 00:20:19 +0900
+
 pique (0.02.3) maverick; urgency=low
 
   * Streamlined gui/player integration

@@ -7,7 +7,7 @@ import os
 def find(path='.'):
 	return list(chain(*[find(x) if os.path.isdir(x) else (x,) for x in map(lambda x:os.path.join(path,x),os.listdir(path))]))
 
-setup(name='pique', version='0.02.3',
+setup(name='pique', version='0.02.4',
 	author='Ryan Marquardt',
 	author_email='ryan.marquardt@gmail.com',
 	description='Pique Media Center',
