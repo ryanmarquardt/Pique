@@ -106,6 +106,7 @@ class VideoBox(PObject, gtk.VBox):
 		self.tracklist.set_property('fixed-height-mode', True)
 		
 		self.scrolled_tracklist = gtk.ScrolledWindow()
+		self.scrolled_tracklist.unset_flags(gtk.CAN_FOCUS)
 		self.scrolled_tracklist.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
 		self.scrolled_tracklist.add(self.tracklist)
 		
