@@ -243,9 +243,6 @@ class Player(PObject):
 		vs = self.player.get_property('video-sink')
 		vs.expose()
 		
-	def seek_raw(self, new, absolute=True):
-		self.seek(new/SECOND, absolute=absolute)
-		
 	def seek(self, new, absolute=True):
 		'''seek(new_position, absolute=True) -> None
 

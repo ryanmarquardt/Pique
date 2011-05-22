@@ -111,7 +111,7 @@ class CommandMap(threading.Thread, dict):
 		if exc is None:
 			return ret
 		else:
-			raise exc
+			raise exc[0], exc[1], exc[2]
 		
 	def run(self):
 		while True:
@@ -127,10 +127,12 @@ class CommandMap(threading.Thread, dict):
 				try:
 					ret = f()
 					exc = None
-				except BaseException, exc:
+				except BaseException:
+					exc = sys.exc_info()
 					ret = None
 				finally:
 					v.set((exc,ret))
+					del exc
 			
 class PluginManager(collections.defaultdict):
 	def __init__(self):

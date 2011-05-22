@@ -100,21 +100,32 @@ class VideoBox(PObject, gtk.VBox):
 		self.tracklist_model = gtk.ListStore(str)
 		self.tracklist = gtk.TreeView(self.tracklist_model)
 		self.tracklist.unset_flags(gtk.CAN_FOCUS)
-		self.tracklist_model.append(('track 1',))
-		self.tracklist.append_column(gtk.TreeViewColumn('Title', gtk.CellRendererText(), text=0))
+		tracks_col = gtk.TreeViewColumn('Playlist', gtk.CellRendererText(), text=0)
+		tracks_col.set_property('sizing', gtk.TREE_VIEW_COLUMN_FIXED)
+		self.tracklist.append_column(tracks_col)
+		self.tracklist.set_property('fixed-height-mode', True)
+		
+		self.scrolled_tracklist = gtk.ScrolledWindow()
+		self.scrolled_tracklist.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+		self.scrolled_tracklist.add(self.tracklist)
+		
+		self.update_playlist(['track 1', 'track 2', 'track 3'])
 		
 		self.menu = gtk.Menu()
-		self.append_menu('Play', 'play')
-		self.append_menu('Pause', 'pause')
+		self.append_menu('Toggle Sidebar', 'menu')
+		self.append_menu('Fullscreen', 'fullscreen')
 		self.append_menu('Quit', 'quit')
 		
-		#self.sidebar = gtk.HPaned()
-		#self.sidebar.pack1(self.menu)
-		#self.sidebar.pack2(self.movie_window)
-		#self.sidebar.set_position(200)
+		self.sidebar = self.scrolled_tracklist
+		
+		self.panes = gtk.HPaned()
+		self.panes.pack1(self.movie_window, shrink=False)
+		self.panes.pack2(self.sidebar, resize=False)
+		self.panes.set_position(300)
 		
 		gtk.VBox.add_events(self, gtk.gdk.BUTTON_PRESS_MASK)
-		gtk.VBox.pack_start(self, self.movie_window, True, True)
+		#gtk.VBox.pack_start(self, self.movie_window, True, True)
+		gtk.VBox.pack_start(self, self.panes, True, True)
 		gtk.VBox.pack_start(self, self.buttons, False, False)
 		
 	def append_menu(self, title, cmd):
@@ -127,9 +138,20 @@ class VideoBox(PObject, gtk.VBox):
 		self.menu.append(menuitem)
 		return menuitem
 		
+	def update_playlist(self, entries):
+		self.tracklist_model.clear()
+		for e in entries:
+			self.tracklist_model.append((e,))
+		
 	def on_show_menu(self, widget, event):
-		self.menu.popup(None, None, None, event.button, event.time)
+		self.popup_menu(event)
 		return True
+		
+	def popup_menu(self, event):
+		self.menu.popup(None, None, None, event.button, event.time)
+		
+	def popdown_menu(self):
+		self.menu.popdown()
 		
 	def on_keypress(self, window, event):
 		modifiers = gtk.gdk.SHIFT_MASK | gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
@@ -178,6 +200,8 @@ class GUI(gtk.Window):
 	def __init__(self, confitems):
 		self.dependencies = {
 			'Player': self.on_set_player,
+			'Playlist': self.on_set_playlist,
+			'Library': self.on_set_library,
 			'KeyMap': self.on_set_keymap,
 			'commandmap': self.on_set_commandmap,
 		}
@@ -208,6 +232,8 @@ class GUI(gtk.Window):
 			'show_menu':	self.show_menu,
 			'hide_menu':	self.hide_menu,
 		}
+		
+		self.playlist_format = '{0.track_number} - {0.title}'
 	
 	def on_set_player(self, player):
 		self.player = player
@@ -216,6 +242,16 @@ class GUI(gtk.Window):
 		self.player.connect('update', self.update_time)
 		self.stop = player.stop
 		#self.connect('volume', player.set_volume)
+		
+	def on_set_playlist(self, playlist):
+		self.playlist = playlist
+		self.playlist.connect('changed', self.on_playlist_changed)
+		
+	def on_playlist_changed(self):
+		self.videobox.update_playlist(self.playlist_format.format(self.lib[uri]) for uri in self.playlist.entries)
+		
+	def on_set_library(self, lib):
+		self.lib = lib
 		
 	def on_set_keymap(self, keymap):
 		self.keymap = keymap
@@ -229,7 +265,7 @@ class GUI(gtk.Window):
 		self.videobox.connect('play-pause', self.commandmap.async, 'play_pause')
 		self.videobox.connect('next', self.commandmap.async, 'next')
 		self.videobox.connect('previous', self.commandmap.async, 'previous')
-		self.videobox.connect('position', self.commandmap.async, 'seek_raw')
+		self.videobox.connect('position', lambda pos:self.commandmap.async('seek',pos/SECOND))
 		self.videobox.connect('menu', self.on_menu_clicked)
 		
 	def update_time(self, pos, dur):
@@ -246,8 +282,9 @@ class GUI(gtk.Window):
 		self.quit()
 		
 	def on_movie_window_clicked(self, window, event):
+		debug(event.type, event.button)
 		if event.type == gtk.gdk.BUTTON_PRESS and event.button == 3:
-			self.show_menu()
+			self.show_menu(event)
 		elif event.type == gtk.gdk._2BUTTON_PRESS and event.button == 1:
 			self.toggle_fullscreen()
 			
@@ -294,23 +331,23 @@ Toggle whether control bar is shown.'''
 		else:
 			self.show_controls()
 		
-	def show_menu(self):
+	def show_menu(self, event=None):
 		'''show_menu() -> None
 
 Show the menu.'''
-		self.videobox.menu.show()
+		self.videobox.sidebar.show()
 		
 	def hide_menu(self):
 		'''hide_menu() -> None
 
 Hide the menu.'''
-		self.videobox.menu.hide()
+		self.videobox.sidebar.hide()
 		
 	def toggle_menu(self):
 		'''menu() -> None
 
 Toggle whether menu is shown.'''
-		if self.menu.get_property('visible'):
+		if self.videobox.sidebar.get_property('visible'):
 			self.hide_menu()
 		else:
 			self.show_menu()

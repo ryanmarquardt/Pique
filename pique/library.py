@@ -76,6 +76,11 @@ class Entry(collections.MutableMapping):
 			keys = self._db.getkeys(self.uri, nkey)
 			return sorted(keys, key=f, reverse=True)
 	__getitem__ = def_value
+	def __getattr__(self, key):
+		try:
+			return self[key]
+		except KeyError:
+			return None
 		
 	def timestamp(self, key, value):
 		with self._lk:
