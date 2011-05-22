@@ -47,15 +47,24 @@ class VideoBox(PObject, gtk.VBox):
 		
 		self.movie_window = gtk.DrawingArea()
 		self.movie_window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color(0,0,0))
+		self.movie_window.add_events(gtk.gdk.BUTTON_PRESS_MASK)
+		self.movie_window.add_events(gtk.gdk.KEY_PRESS_MASK)
+		self.movie_window.set_flags(gtk.CAN_FOCUS)
+		self.movie_window.grab_focus()
+		self.movie_window.connect('key-press-event', self.on_keypress)
+		self.movie_window.connect('button-press-event', self.on_button_press_event)
 		
 		self.previous = gtk.ToolButton(gtk.STOCK_MEDIA_PREVIOUS)
 		self.previous.get_child().unset_flags(gtk.CAN_FOCUS)
+		self.previous.connect('clicked', self.on_signal, 'previous')
 		
 		self.play_pause = gtk.ToolButton(gtk.STOCK_MEDIA_PLAY)
 		self.play_pause.get_child().unset_flags(gtk.CAN_FOCUS)
+		self.play_pause.connect('clicked', self.on_signal, 'play-pause')
 		
 		self.next = gtk.ToolButton(gtk.STOCK_MEDIA_NEXT)
 		self.next.get_child().unset_flags(gtk.CAN_FOCUS)
+		self.next.connect('clicked', self.on_signal, 'next')
 		
 		self.position = gtk.Adjustment(step_incr=Time.FromSec(15),page_incr=Time.FromSec(60))
 		
@@ -66,14 +75,16 @@ class VideoBox(PObject, gtk.VBox):
 		self.slider = gtk.ToolItem()
 		self.slider.set_expand(True)
 		self.slider.add(self.scale)
+		self.slider.get_child().connect('change-value', self.on_slider)
 		
 		self.volume = gtk.ToolItem()
 		self.volume.add(gtk.VolumeButton())
 		self.volume.up = False
 		self.volume.get_child().unset_flags(gtk.CAN_FOCUS)
 		
-		self.settingsmenu = gtk.ToolButton(gtk.STOCK_PROPERTIES)
+		self.settingsmenu = gtk.ToolButton(gtk.STOCK_INDEX)
 		self.settingsmenu.get_child().unset_flags(gtk.CAN_FOCUS)
+		self.settingsmenu.get_child().connect('button-press-event', self.on_show_menu)
 		
 		self.buttons = gtk.Toolbar()
 		self.buttons.unset_flags(gtk.CAN_FOCUS)
@@ -93,11 +104,9 @@ class VideoBox(PObject, gtk.VBox):
 		self.tracklist.append_column(gtk.TreeViewColumn('Title', gtk.CellRendererText(), text=0))
 		
 		self.menu = gtk.Menu()
-		for i,(title,cmd) in enumerate([('Play','play'), ('Pause','pause'), ('Quit','quit')]):
-			menuitem = gtk.MenuItem(title)
-			menuitem.show()
-			menuitem.connect('activate', self.on_menu_clicked, cmd)
-			self.menu.append(menuitem)
+		self.append_menu('Play', 'play')
+		self.append_menu('Pause', 'pause')
+		self.append_menu('Quit', 'quit')
 		
 		#self.sidebar = gtk.HPaned()
 		#self.sidebar.pack1(self.menu)
@@ -108,32 +117,24 @@ class VideoBox(PObject, gtk.VBox):
 		gtk.VBox.pack_start(self, self.movie_window, True, True)
 		gtk.VBox.pack_start(self, self.buttons, False, False)
 		
-		self.play_pause.connect('clicked', self.on_signal, 'play-pause')
-		self.previous.connect('clicked', self.on_signal, 'previous')
-		self.next.connect('clicked', self.on_signal, 'next')
-		self.slider.get_child().connect('change-value', self.on_slider)
-		self.movie_window.connect('button-press-event', self.on_button_press_event)
-		self.settingsmenu.get_child().connect_object('event', self.on_show_menu, self.menu)
-		
-	def set_keymap(self, keymap):
-		debug('GUI Set Keymap')
-		self.movie_window.add_events(gtk.gdk.KEY_PRESS_MASK)
-		self.movie_window.set_flags(gtk.CAN_FOCUS)
-		self.movie_window.grab_focus()
-		self.movie_window.connect('key-press-event', self.on_keypress)
-		self.keymap = keymap
+	def append_menu(self, title, cmd):
+		menuitem = gtk.MenuItem(title)
+		menuitem.show()
+		if hasattr(cmd, '__call__'):
+			menuitem.connect('activate', cmd)
+		else:
+			menuitem.connect('activate', self.on_menu_clicked, cmd)
+		self.menu.append(menuitem)
+		return menuitem
 		
 	def on_show_menu(self, widget, event):
-		if event.type == gtk.gdk.BUTTON_PRESS:
-			widget.popup(None, None, None, event.button, event.time)
-			return True
-		else:
-			return False
+		self.menu.popup(None, None, None, event.button, event.time)
+		return True
 		
 	def on_keypress(self, window, event):
 		modifiers = gtk.gdk.SHIFT_MASK | gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
 		accel = gtk.accelerator_name(event.keyval, event.state & modifiers)
-		self.keymap.interpret(accel)
+		self.emit('keypress', accel)
 		
 	def on_menu_clicked(self, menu, cmd):
 		self.emit('menu', cmd)
@@ -155,10 +156,9 @@ class VideoBox(PObject, gtk.VBox):
 			return '%s / %s' % (Time(pos),Time(dur))
 		
 	def update_state(self, new):
-		if new == 'playing':
-			self.play_pause.set_stock_id(gtk.STOCK_MEDIA_PAUSE)
-		else:
-			self.play_pause.set_stock_id(gtk.STOCK_MEDIA_PLAY)
+		self.play_pause.set_stock_id(
+			gtk.STOCK_MEDIA_PAUSE if new == 'playing' else gtk.STOCK_MEDIA_PLAY
+		)
 
 	def update_time(self, position, duration):
 		try:
@@ -191,6 +191,7 @@ class GUI(gtk.Window):
 		
 		self.videobox = VideoBox()
 		self.videobox.connect('clicked', self.on_movie_window_clicked)
+		self.videobox.connect('keypress', self.on_keypress)
 		
 		gtk.Window.add_accel_group(self, accelgroup)
 		gtk.Window.set_title(self, 'Video-Player')
@@ -217,7 +218,10 @@ class GUI(gtk.Window):
 		#self.connect('volume', player.set_volume)
 		
 	def on_set_keymap(self, keymap):
-		self.videobox.set_keymap(keymap)
+		self.keymap = keymap
+		
+	def on_keypress(self, accel):
+		self.keymap.interpret(accel)
 		
 	def on_set_commandmap(self, commandmap):
 		self.commandmap = commandmap
@@ -241,14 +245,14 @@ class GUI(gtk.Window):
 		self.stop()
 		self.quit()
 		
-	def on_movie_window_clicked(self, event):
+	def on_movie_window_clicked(self, window, event):
 		if event.type == gtk.gdk.BUTTON_PRESS and event.button == 3:
 			self.show_menu()
 		elif event.type == gtk.gdk._2BUTTON_PRESS and event.button == 1:
 			self.toggle_fullscreen()
 			
-	def on_menu_clicked(self, command):
-		self.commandmap(command)
+	def on_menu_clicked(self, command, args=(), kwargs={}):
+		self.commandmap.async(command, *args, **kwargs)
 	
 	def on_window_state_event(self, window, event):
 		if event.changed_mask & gtk.gdk.WINDOW_STATE_FULLSCREEN:

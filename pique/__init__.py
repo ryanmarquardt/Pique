@@ -98,13 +98,15 @@ class CommandMap(threading.Thread, dict):
 		return 1
 		
 	def async(self, cmd, *args, **kwargs):
+		func = self[cmd]
 		debug('self._q.put', cmd, args, kwargs)
-		self._q.put((cmd, args, kwargs, None))
+		self._q.put((func, args, kwargs, None))
 		
 	def __call__(self, cmd, *args, **kwargs):
+		func = self[cmd]
 		debug('self._q.put', cmd, args, kwargs)
 		v = LockedValue()
-		self._q.put((cmd, args, kwargs, v))
+		self._q.put((func, args, kwargs, v))
 		exc,ret = v.wait()
 		if exc is None:
 			return ret
@@ -116,7 +118,7 @@ class CommandMap(threading.Thread, dict):
 			val = self._q.get()
 			command, args, kwargs, v = val
 			try:
-				f = lambda:self[command](*args, **kwargs)
+				f = lambda:command(*args, **kwargs)
 				if v is None:
 					f()
 			except BaseException, e:
