@@ -5,6 +5,8 @@ SUBSHELL=${SHELL:-/bin/bash}
 RM=$(which rm)
 TAR=$(which tar)
 DPUT=$(which dput)
+DIR=$(dirname $(dirname $0))
+cd $DIR
 
 export PY_FULLNAME=$($PYTHON setup.py --fullname)
 export PACKAGE_NAME=$($PYTHON setup.py --name)
@@ -43,7 +45,7 @@ deb () {
 			exit 2
 			;;
 	esac
-	echo ${PACKAGE_FULLNAME}_${ARCH}.deb
+	export DEBFILE="$PWD/dist/${PACKAGE_FULLNAME}_${ARCH}.deb"
 }
 
 case $1 in
@@ -52,10 +54,11 @@ case $1 in
 		;;
 	deb)
 		deb $2
+		echo "$DEBFILE"
 		;;
 	local-install)
 		deb binary
-		sudo dpkg -i "dist/${PACKAGE_FULLNAME}_${PACKAGE_ARCH}.deb"
+		sudo dpkg -i "$DEBFILE"
 		;;
 	run)
 		pack
