@@ -53,6 +53,7 @@ class Entry(collections.MutableMapping):
 		self._db = lib._store
 		self._lk = lib._lock
 		self._nk = lib._nk
+		self._cv = lib._cv
 		self._sn = lib.sync
 		self.uri = uri
 		
@@ -88,10 +89,12 @@ class Entry(collections.MutableMapping):
 		
 	def edit(self, key, value):
 		with self._lk:
-			self._db.set(self.uri, self._nk(key), value, time.time())
+			nkey = self._nk(key)
+			self._db.set(self.uri, nkey, self._cv(nkey, value), time.time())
 	def update(self, key, value):
 		with self._lk:
-			self._db.set(self.uri, self._nk(key), value, None)
+			nkey = self._nk(key)
+			self._db.set(self.uri, nkey, self._cv(nkey, value), None)
 	__setitem__ = edit
 		
 	def __delitem__(self, key):
@@ -205,10 +208,29 @@ class LibWrap(collections.Mapping):
 		self._store = store(os.path.expanduser(location))
 		self._lock = threading.RLock()
 		self._key_re = re.compile('[a-z0-9]+')
+		self.aliases = {
+			'track-number': 'track',
+			'ext': 'extension',
+		}
+		self.coerce = {
+			'track': int,
+			'disc': int,
+			'replaygain-track-gain': float,
+			'replaygain-track-peak': float,
+			'replaygain-album-gain': float,
+			'replaygain-album-peak': float,
+			'replaygain-reference-level': float,
+			'duration': Time,
+			'bitrate': int,
+		}
 		
 	def _nk(self, k):
 		'''normalize key'''
-		return '-'.join(self._key_re.findall(k.lower()))
+		k = '-'.join(self._key_re.findall(k.lower()))
+		return self.aliases.get(k,k)
+		
+	def _cv(self, k, v):
+		return v if v is None else self.coerce.get(k, lambda x:x)(v)
 		
 	def sync(self):
 		with self._lock:
