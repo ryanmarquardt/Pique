@@ -35,9 +35,6 @@ class ConsoleThread(bgthread.BgThread):
 		bgthread.BgThread.__init__(self, *args, **kwargs)
 		self.dependencies = {'KeyMap':self.on_set_keymap}
 		
-	def connect(self, key, func, *args, **kwargs):
-		self.keymap[key] = func,args,kwargs
-		
 	def on_set_keymap(self, keymap):
 		self.handler = keymap.interpret
 		
@@ -55,4 +52,5 @@ class ConsoleThread(bgthread.BgThread):
 			self.handler('eof')
 		
 	def quit(self):
-		self.rawtty.__exit__(None, None, None)
+		self.rawtty.shutdown()
+		self.join()

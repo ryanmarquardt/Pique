@@ -146,6 +146,9 @@ class basetty(object):
 					if self.quit and seq == self.quit:
 						raise EOF
 						
+	def shutdown(self):
+		self.__exit__(None, None, None)
+						
 class signaltty(basetty):
 	def __init__(self, *args, **kwargs):
 		timeout = kwargs.pop('timeout', 0.1)
@@ -161,6 +164,10 @@ class signaltty(basetty):
 			return c
 		else:
 			raise EOF
+			
+	def shutdown(self):
+		self.alarm.__exit__(None, None, None)
+		basetty.shutdown(self)
 			
 QueueEmpty = Queue.Empty
 class threadtty(basetty, threading.Thread):
@@ -192,6 +199,10 @@ class threadtty(basetty, threading.Thread):
 			raise KeyboardInterrupt
 		else:
 			raise EOF
+	
+	def shutdown(self):
+		self.q.put('')
+		basetty.shutdown(self)
 	
 if __name__=='__main__':
 	rawtty = threadtty(Sequences, timeout=1)
