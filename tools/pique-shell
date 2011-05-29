@@ -28,29 +28,27 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import pique.client
-Client = pique.client.Client
-import sys
-
 import optparse
+import os
+import readline
+import sys
+import shlex
 
 parser = optparse.OptionParser()
 parser.add_option('-c', dest='command', action='append', default=[],
   help='Command to run (may be used multiple times)')
 parser.add_option('-i', dest='interactive', action='store_true',
   help='Enter interactive mode after running commands from -c string or file')
-parser.add_option('-H', '--host', dest='host', default='localhost',
-  help='IP address of the server')
-parser.add_option('-P', '--port', dest='port', type='int',
-  help='Port to connect to')
-parser.add_option('--no-conf', action='store_true', dest='noconf',
-  help='Do not read any configuration files')
+
+pique.client.add_default_options(parser)
+
 parser.add_option('-v', '--verbose', dest='verbose', action='store_true',
   help='Display extra information')
 
-options, args = parser.parse_args()
+options, args = pique.client.parse_args(parser)
+
 if options.interactive and ('-' in args or not sys.stdin.isatty()):
 	parser.error("Interactive mode requires standard input to be a terminal.")
-
 if options.verbose:
 	def debug(*args):
 		print ' '.join(map(str,args))
@@ -58,25 +56,10 @@ else:
 	def debug(*args):
 		pass
 
-import os.path
-
-if options.port is None:
-	if options.noconf:
-		options.port = NETPORT
-	else:
-		import ConfigParser
-		conf = ConfigParser.SafeConfigParser()
-		conf.readfp(open(os.path.join(os.path.dirname(pique.client.__file__), 'default.conf')))
-		conf.read([os.path.expanduser('~/.config/pique/pique.conf')])
-		options.port = conf.getint('Network', 'listen-port')
-
-import readline
-import shlex
-
 class shell(object):
 	def __init__(self, prompt, fd=sys.stdin, history_file=None):
 		self.fd = fd
-		self.prompt = prompt #if self.fd.isatty() else ''
+		self.prompt = prompt
 		self.history_file = history_file
 		
 	def __enter__(self):
@@ -106,13 +89,13 @@ def printformat(obj):
 		print obj
 	elif isinstance(obj, Exception):
 		print '----- Remote Exception -----'
-		print obj.args[0],	
+		print obj.args[0],
 		print '----------------------------'
 	else:
 		print repr(obj)
 
 debug('Connecting to host %s:%r' % (options.host, options.port))
-serv = Client()
+serv = pique.client.Client()
 serv.connect(options.host, options.port)
 
 prompt = '(pique)%s: ' % options.host
@@ -139,7 +122,6 @@ for a in args:
 		sources.append(open(a, 'r'))
 		
 if sys.stdin.isatty() and (not sources or (options.interactive and sys.stdin not in sources)):
-	#Interactive mode
 	debug('Using interactive mode:', 'Interactive flag set.' if options.interactive else 'No other sources.')
 	sources.append(shell(prompt, history_file=history))
 

@@ -26,10 +26,10 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+import optparse
 import socket
-import time
-
 import sys
+import time
 
 from common import *
 import rpc
@@ -44,3 +44,28 @@ class Client(rpc.Client):
 				
 	def set_credentials(self, user):
 		self.credentials = user,
+		
+def add_default_options(parser):
+	parser.add_option('-H', '--host', dest='host', default='localhost',
+	  help='IP address of the server'),
+	parser.add_option('-p', '--port', dest='port', type='int',
+	  help='Port to connect to'),
+	parser.add_option('--no-conf', action='store_true', dest='noconf',
+	  help='Do not read any configuration files'),
+	
+def parse_args(parser):
+	options, args = parser.parse_args()
+	if options.port is None:
+		if options.noconf:
+			options.port = NETPORT
+		else:
+			import ConfigParser
+			import os.path
+			conf = ConfigParser.SafeConfigParser()
+			conf.readfp(open(os.path.join(os.path.dirname(__file__), 'default.conf')))
+			conf.read([os.path.expanduser('~/.config/pique/pique.conf')])
+			try:
+				options.port = conf.getint('Network', 'listen-port')
+			except ConfigParser.Error:
+				options.port = NETPORT
+	return options,args
