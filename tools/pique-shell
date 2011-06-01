@@ -30,6 +30,7 @@
 import pique.client
 import optparse
 import os
+import re
 import readline
 import sys
 import shlex
@@ -85,7 +86,7 @@ def printformat(obj):
 		return
 	elif isinstance(obj, (list,tuple,set)):
 		print '\n'.join(map(repr,obj))
-	elif isinstance(obj, basestring):
+	elif isinstance(obj, (basestring, float)):
 		print obj
 	elif isinstance(obj, Exception):
 		print '----- Remote Exception -----'
@@ -108,6 +109,18 @@ class CommandFile(object):
 	def __exit__(self, typ, val, tb): pass
 	def __iter__(self):
 		yield self.command
+
+def passthrough(*args, **kwargs):
+	return args, kwargs
+
+def Parse(line):
+	c = re.match(r'\s*(\w+)(\(.*\))\s*', line) 
+	if c:
+		a,k = eval('passthrough' + c.group(2))
+		return c.group(1), a, k
+	else:
+		argv = shlex.split(line, True)
+		return argv[0], argv[1:], {}
 
 sources = []
 for cmd in options.command:
@@ -132,10 +145,10 @@ for source in sources:
 	with source:
 		try:
 			for line in source:
-				argv = shlex.split(line, True)
-				if argv:
-					debug('Calling', *argv)
-					handle, result = serv.call_quick(*argv)
+				cmd,args,kwargs = Parse(line)
+				if cmd:
+					debug('Calling', cmd, *args)
+					handle, result = serv.call_quick(cmd, *args, **kwargs)
 					printformat(result)
 		except (EOFError, KeyboardInterrupt):
 			break
