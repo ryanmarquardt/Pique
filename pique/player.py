@@ -71,6 +71,10 @@ class Error(Exception):
 				Exception.__init__(self, error.message)
 				return
 		Exception.__init__(self, error.code, error.domain, error.message, dbg)
+		
+	def __str__(self):
+		code,domain,msg,_ = self.args
+		return "GstreamerError #%i \"%s\": %s" % (code,domain,msg)
 	
 class PlayThread(BgThread):
 	def main(self, update, frequency=0.1):
