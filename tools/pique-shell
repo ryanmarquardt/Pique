@@ -51,11 +51,9 @@ options, args = pique.client.parse_args(parser)
 if options.interactive and ('-' in args or not sys.stdin.isatty()):
 	parser.error("Interactive mode requires standard input to be a terminal.")
 if options.verbose:
-	def debug(*args):
-		print ' '.join(map(str,args))
+	def debug(*args): print >>sys.syderr, ' '.join(map(str,args))
 else:
-	def debug(*args):
-		pass
+	def debug(*args): pass
 
 class shell(object):
 	def __init__(self, prompt, fd=sys.stdin, history_file=None):
@@ -103,54 +101,47 @@ prompt = '(pique)%s: ' % options.host
 history = os.path.expanduser('~/.config/pique/shell_history')
 
 class CommandFile(object):
-	def __init__(self, command):
-		self.command = command
+	def __init__(self, command): self.command = command
 	def __enter__(self): return self
 	def __exit__(self, typ, val, tb): pass
-	def __iter__(self):
-		yield self.command
+	def __iter__(self): yield self.command
 
-def passthrough(*args, **kwargs):
-	return args, kwargs
+def passthrough(*args, **kwargs): return args, kwargs
 
-def Parse(line):
-	c = re.match(r'\s*(\w+)(\(.*\))\s*', line) 
-	if c:
-		a,k = eval('passthrough' + c.group(2))
-		return c.group(1), a, k
-	else:
-		argv = shlex.split(line, True)
-		return argv[0], argv[1:], {}
+def Parse(source):
+	with source:
+		for line in source:
+			c = re.match(r'\s*(\w+)(\(.*\))\s*', line) 
+			if c:
+				cmd,(args,kwargs) = c.group(1),eval('passthrough' + c.group(2))
+			else:
+				argv = shlex.split(line, True)
+				cmd,args,kwargs = argv[0], argv[1:], {}
+			if cmd:
+				yield cmd, args, kwargs
 
 sources = []
 for cmd in options.command:
 	debug('sys.argv has command', cmd)
 	sources.append(CommandFile(cmd))
-	
 for a in args:
 	debug('sys.argv has file', a)
-	if a == '-':
-		sources.append(sys.stdin)
-	else:
-		sources.append(open(a, 'r'))
-		
-if sys.stdin.isatty() and (not sources or (options.interactive and sys.stdin not in sources)):
-	debug('Using interactive mode:', 'Interactive flag set.' if options.interactive else 'No other sources.')
+	sources.append(open(a, 'r') if a != '-' else sys.stdin)
+if sys.stdin.isatty() and \
+   (not sources or (options.interactive and sys.stdin not in sources)):
+	debug('Using interactive mode:', \
+	   'Interactive flag set.' if options.interactive else 'No other sources.')
 	sources.append(shell(prompt, history_file=history))
-
 if not sources:
 	sources.append(sys.stdin)
 
 for source in sources:
-	with source:
-		try:
-			for line in source:
-				cmd,args,kwargs = Parse(line)
-				if cmd:
-					debug('Calling', cmd, *args)
-					handle, result = serv.call_quick(cmd, *args, **kwargs)
-					printformat(result)
-		except (EOFError, KeyboardInterrupt):
-			break
+	try:
+		for cmd,args,kwargs in Parse(source):
+			debug('Calling', cmd, *args)
+			handle, result = serv.call_quick(cmd, *args, **kwargs)
+			printformat(result)
+	except (EOFError, KeyboardInterrupt):
+		break
 
 debug('Disconnecting')
