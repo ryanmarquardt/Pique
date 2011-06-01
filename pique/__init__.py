@@ -107,32 +107,23 @@ class CommandMap(threading.Thread, dict):
 		debug('self._q.put', cmd, args, kwargs)
 		v = LockedValue()
 		self._q.put((func, args, kwargs, v))
-		exc,ret = v.wait()
-		if exc is None:
+		ret,(typ,val,tb) = v.wait()
+		debug(ret, typ, val, tb)
+		if typ is None:
 			return ret
 		else:
-			raise exc[0], exc[1], exc[2]
+			raise typ, val, tb
 		
 	def run(self):
 		while True:
 			val = self._q.get()
 			command, args, kwargs, v = val
-			try:
-				f = lambda:command(*args, **kwargs)
-				if v is None:
-					f()
-			except BaseException, e:
-				traceback.print_exc(e)
-			if not v is None:
-				try:
-					ret = f()
-					exc = None
-				except BaseException:
-					exc = sys.exc_info()
-					ret = None
-				finally:
-					v.set((exc,ret))
-					del exc
+			f = lambda:command(*args, **kwargs)
+			state = capture(f)
+			if v is None and state[1] == (None, None, None):
+				print state[1][2]
+			else:
+				v.set(state)
 			
 class PluginManager(collections.defaultdict):
 	def __init__(self):

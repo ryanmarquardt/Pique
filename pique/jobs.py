@@ -48,6 +48,7 @@ class JobsManager(PObject):
 		while True:
 			id, func, args, kwargs = self.queue.get()
 			debug('Running task', id)
+			capture(lambda:func(*args,**kwargs))
 			try:
 				r = func(*args, **kwargs)
 			except Exception, e:
