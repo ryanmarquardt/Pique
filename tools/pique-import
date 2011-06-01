@@ -42,15 +42,29 @@ parser.add_option('-f', '--format', dest='format',
   help="Interpret metadata from each file's path according to FORMAT. By default: '{artist}/{disc}.{track} {title}'")
 options,args = pique.client.parse_args(parser)
 
-wformat = options.format.replace('{track}', '{track:02}') + '.{ext}'
-rformat = ''
-for i,s in enumerate(re.split('{(.+?)}', options.format)):
-	if i % 2:
-		s = {'disc':'(?P<%s>\\d+)', 'track':'(?P<%s>\\d+)',
-		}.get(s, '(?P<%s>[^/]*?)') % s
-	rformat += s
-rformat += '\\.(?P<ext>\\w+)$'
-print rformat
+class TagFormatter(object):
+	def __init__(self, f, add_ext=True):
+		self.write = f.replace('{track}', '{track:02}')
+		self.read = ''
+		for i,s in enumerate(re.split('{(.+?)}', f)):
+			if i & 1:
+				s = {'disc':'(?P<%s>\\d+)', 'track':'(?P<%s>\\d+)',
+				}.get(s, '(?P<%s>[^/]*?)') % s
+			self.read += s
+		if add_ext:
+			self.write += '.{ext}'
+			self.read += '\\.(?P<ext>\\w+)$'
+			
+	def wformat(self, **data):
+		self.write.format(**data)
+		
+	def rformat(self, s):
+		m = re.search(self.read, s)
+		if m:
+			return m.groupdict()
+
+f = TagFormatter(options.format)
+print f.read
 
 serv = pique.client.Client()
 serv.connect(options.host, options.port)
@@ -58,15 +72,14 @@ serv.connect(options.host, options.port)
 for a in args:
 	for path in find(a):
 		u = uri(path)
-		m = re.search(rformat, u)
-		if not m:
+		d = f.rformat(u)
+		if d is None:
 			print 'FAILED:', path
 			continue
-		d = m.groupdict()
 		for t in ('disc', 'track'):
 			if t in d:
 				d[t] = int(d[t])
-		repath = wformat.format(**d)
+		repath = f.wformat(**d)
 		print repath
 		print serv.call_quick('import', u)
 		for k,v in d.items():
