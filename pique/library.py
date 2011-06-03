@@ -210,6 +210,7 @@ class LibWrap(collections.Mapping):
 		self._key_re = re.compile('[a-z0-9]+')
 		self.aliases = {
 			'track-number': 'track',
+			'disk': 'disc',
 			'ext': 'extension',
 		}
 		self.coerce = {
