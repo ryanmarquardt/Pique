@@ -62,6 +62,8 @@ class TagFormatter(object):
 		m = re.search(self.read, s)
 		if m:
 			return m.groupdict()
+		else:
+			raise Exception('No match for %r')
 
 f = TagFormatter(options.format)
 print f.read
