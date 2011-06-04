@@ -257,6 +257,7 @@ class Library(PObject):
 		self.commands = {
 			'find':	self.find,
 			'list':	self.select_distinct,
+			'remove':	self.remove,
 			'import':	self.Import,
 			'info':	self.info,
 			'edit':	self.edit,
@@ -292,6 +293,12 @@ job id number.'''
 		#self.jobsmanager.submit(self.player.normalize_uri, path)
 		return r
 		
+	def remove(self, uri):
+		'''remove(uri) -> None
+
+Removes a uri and all associated data from the library.'''
+		del self.db[uri]
+		
 	def find(self, column, *what):
 		'''find(column, value[, value, ...]) -> List
 
@@ -303,7 +310,8 @@ a list of uris where table 'column' has 'value'.'''
 		'''edit(uri, column, value=None) -> Dict
 
 Change the metadata for uri to have column=value. Returns a dictionary
-containing all of the uri's metdata.'''
+containing all of the uri's metdata. If value is None, that key will not appear
+to have a value.'''
 		with self.db[uri] as entry:
 			entry.edit(key, value)
 		return dict(entry)
