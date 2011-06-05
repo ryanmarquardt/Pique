@@ -115,7 +115,7 @@ def Parse(source):
 			if c:
 				cmd,(args,kwargs) = c.group(1),eval('passthrough' + c.group(2))
 			else:
-				argv = shlex.split(line, True)
+				argv = shlex.split(line, True) or ['']
 				cmd,args,kwargs = argv[0], argv[1:], {}
 			if cmd:
 				yield cmd, args, kwargs
