@@ -66,10 +66,6 @@ def Bin(*elements):
 class Error(Exception):
 	def __init__(self, error, dbg):
 		debug('Error', error.code, error.domain, repr(error.message), repr(dbg))
-		if error.domain == 'gst-resource-error-quark':
-			if error.code == 3:
-				Exception.__init__(self, error.message)
-				return
 		Exception.__init__(self, error.code, error.domain, error.message, dbg)
 		
 	def __str__(self):
@@ -244,8 +240,8 @@ class Player(PObject):
 		self._window = w
 		self._window_handlers = (
 			self._window.connect('expose-event', self.expose),
-			#self._window.connect('configure-event', self.expose),
-			#self._window.connect('realize', self.expose),
+			self._window.connect('configure-event', self.expose),
+			self._window.connect('realize', self.expose),
 		)
 		
 	def expose(self, widget=None, event=None):
@@ -290,7 +286,7 @@ number of seconds forward or backward to move.'''
 
 Returns the current playing state.'''
 		return {
-			'state':StateMap[self.player.get_state()[0]],
+			'state':StateMap[self.player.get_state()[1]],
 			'position':self.get_position() / SECOND,
 			'duration':self.get_duration() / SECOND,
 			'current_track':self.player.get_property('uri'),
@@ -416,28 +412,19 @@ Move playback to the next item in the playlist.'''
 		tags = self.tagger(uri, normalize=False)
 		self.emit('new-tags', uri, tags)
 		
-	def normalize_uri(self, uri):
-		tags = self.tagger(uri, normalize=True)
-		self.emit('new-tags', uri, tags)
 		
 def gsub(func):
 	main = gobject.MainLoop()
 	q = Queue.Queue()
 	def f(args,kwargs):
-		try:
-			r = func(*args, **kwargs)
-		except BaseException, e:
-			q.put((None,e))
-		else:
-			q.put((r,None))
-		finally:
-			main.quit()
+		q.put(capture(func, args,kwargs))
+		main.quit()
 	def g(*args, **kwargs):
 		gobject.idle_add(f, args, kwargs)
 		main.run()
-		r,e = q.get()
-		if e:
-			raise e
+		r,(t,v,tb) = q.get()
+		if t:
+			raise t, v, tb
 		else:
 			return r
 	return g
@@ -453,10 +440,6 @@ class tag_reader(object):
 		self.playbin = Element('playbin')
 		self.playbin.set_property('audio-sink', Bin(Element('rganalysis'), Element('fakesink')))
 		self.playbin.set_property('video-sink', Element('fakesink'))
-		
-	def on_update(self):
-		sys.stdout.write('.')
-		sys.stdout.flush()
 		
 	@gsub
 	def __call__(self, uri, update_callback=None, update_frequency=1, normalize=True):

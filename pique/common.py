@@ -96,10 +96,12 @@ class PObject(object):
 def hasattrs(obj, attrs):
 	return all(hasattr(obj,a) for a in attrs)
 
-def capture(f):
+def capture(f, args=None, kwargs=None):
+	args = args or ()
+	kwargs = kwargs or {}
 	ret,typ,val,tb = None,None,None,None
 	try:
-		ret = f()
+		ret = f(*args, **kwargs)
 	except BaseException:
 		typ,val,tb = sys.exc_info()
 	finally:

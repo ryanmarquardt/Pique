@@ -2,6 +2,8 @@
 
 import base64
 import hashlib
+import hmac
+import pickle
 import random
 import socket
 import SocketServer
@@ -10,26 +12,40 @@ import traceback
 import xml.dom
 import xml.dom.minidom
 
+impl = xml.dom.getDOMImplementation()
+
+from common import *
+
+class BaseEncoder(object):
+	def __init__(self, *args, **kwargs): pass
+	def encode(self, data): return data
+	def decode(self, data): return data
+
 try:
 	import zlib
 except ImportError:
 	zlib = None
+else:
+	class ZlibEncoder(BaseEncoder):
+		def __init__(self, level=9): self.level = level
+		def encode(self, data): return zlib.compress(data, self.level)
+		def decode(self, data): return zlib.decompress(data)
+
 try:
 	import bz2
 except ImportError:
 	bz2 = None
-
-impl = xml.dom.getDOMImplementation()
+else:
+	class BZ2Encoder(BaseEncoder):
+		def __init__(self, level=9): self.level = level
+		def encode(self, data): return bz2.compress(data, self.level)
+		def decode(self, data): return bz2.decompress(data)
 
 class func_def(object):
 	def __init__(self, name, *args, **kwargs):
-		self.name = str(name)
-		self.args = list(args)
-		self.kwargs = dict(kwargs)
-		
-	def __eq__(self, x):
-		return (self.name,self.args,self.kwargs) == (x.name,x.args,x.kwargs)
-		
+		self.name, self.args, self.kwargs = str(name), list(args), dict(kwargs)
+	def __eq__(a, b):
+		return (a.name,a.args,a.kwargs) == (b.name,b.args,b.kwargs)
 	def __str__(self):
 		items = map(repr,self.args) + map(lambda i:'%s=%r'%i, self.kwargs.items())
 		return '%s(%s)' % (self.name, ', '.join(items))
@@ -37,184 +53,142 @@ class func_def(object):
 		items = map(repr,self.args) + map(lambda i:'%s=%r'%i, self.kwargs.items())
 		return 'func_def(%r, %s)' % (self.name, ', '.join(items))
 
-class DeepXMLTransform(object):
-	type_map = {
-		bool:'bool', int:'int', long:'long', float:'float',
-		complex:'complex',
-		str:'str', unicode:'unicode', bytearray:'bytearray',
-		list:'list', tuple:'tuple',
-		dict:'dict', set:'set', frozenset:'frozenset',
-		'bool':bool, 'int':int, 'long':long, 'float':float,
-		'complex':complex,
-		'str':str, 'unicode':unicode, 'bytearray':bytearray,
-		'list':list, 'tuple':tuple,
-		'dict':dict, 'set':set, 'frozenset':frozenset,
-	}
-	
-	@classmethod
-	def get_type(cls, obj):
-		for t in obj.__class__.mro():
-			if t in cls.type_map:
-				break
-		return cls.type_map[t]
-	
-	@classmethod
-	def type_from_name(cls, name):
-		return cls.type_map[name]
-	
-	@classmethod
-	def from_native(self, doc, obj):
-		if obj is None: return doc.createElement('null')
-		elif obj is True: return doc.createElement('true')
-		elif obj is False: return doc.createElement('false')
-		elif isinstance(obj, func_def):
-			node = doc.createElement('func')
-			node.appendChild(self.from_native(doc, obj.__dict__))
-			return node
-		t = self.get_type(obj)
-		node = doc.createElement(t)
-		if t in ('list','tuple','set','frozenset'):
-			for e in obj:
-				node.appendChild(self.from_native(doc, e))
-		elif t == 'dict':
-			for k,v in obj.iteritems():
-				item = doc.createElement('item')
-				item.appendChild(self.from_native(doc, k))
-				item.appendChild(self.from_native(doc, v))
-				node.appendChild(item)
-		else:
-			node.appendChild(doc.createTextNode(unicode(obj)))
-		return node
-	
-	@classmethod
-	def to_native(self, node):
-		t = node.nodeName
-		if t == 'null': return None
-		elif t == 'true': return True
-		elif t == 'false': return False
-		elif t == 'func':
-			d = self.to_native(getFirstChildElement(node))
-			return func_def(d['name'], *d['args'], **d['kwargs'])
-		t = self.type_from_name(t)
-		if t in (list,tuple,set,frozenset):
-			return t(self.to_native(n) for n in node.childNodes if n.nodeType == n.ELEMENT_NODE)
-		elif t == dict:
-			return dict((self.to_native(getFirstChildElement(n)),self.to_native(getNextSiblingElement(getFirstChildElement(n)))) for n in node.childNodes if n.nodeType == n.ELEMENT_NODE)
-		else:
-			return t(node.firstChild.data)
-
-class ReprTransform(object):
-	def from_native(self, doc, obj):
-		return doc.createTextNode(repr(obj))
+class Base64Encoder(BaseEncoder):
+	def encode(self, data): return base64.b64encode(data)
+	def decode(self, data): return base64.b64decode(data)
 		
-	def to_native(self, node):
-		return eval(node.data)
-
-Transform = DeepXMLTransform()
-Transform = ReprTransform()
-
-class RPC(object):
-	Caps = {
-		'compression': [],
-	}
-	if zlib:
-		Caps['compression'].append('zlib')
-	if bz2:
-		Caps['compression'].append('bz2')
-	
-	def __init__(self):
-		self.doc = impl.createDocument(None, self._root_name, None)
-		self.set_compression(None)
-		self.set_compression('bz2')
-		self.set_compression('zlib')
+class AuthenticationError(Exception): pass
 		
-	def set_compression(self, which, level=9):
-		if which == 'zlib':
-			self.compress = lambda x:zlib.compress(x,level)
-			self.decompress = zlib.decompress
-		elif which == 'bz2':
-			self.compress = lambda x:bz2.compress(x,level)
-			self.decompress = bz2.decompress
-		else:
-			self.compress = lambda x:x
-			self.decompress = lambda x:x
-			
+class HMacEncoder(BaseEncoder):
+	def __init__(self, user='', key='', passmap=None, hash='sha1'):
+		self.user = user
+		self.key = key or passmap and passmap.get(user,None)
+		self.passmap = passmap
+		self.hash = hash
+	def _data(self, doc):
+		return ''.join(c.toxml() for c in doc.documentElement.childNodes)
+	def _hash(self, key, data):
+		return hmac.new(key, data, getattr(hashlib, self.hash)).hexdigest()
+	def encode(self, doc):
+		data = self._data(doc)
+		if self.user and self.key:
+			print 'Authenticating with user=%s and password=%s' % (self.user,self.key)
+			doc.documentElement.setAttribute('hmac', self._hash(self.key, data))
+			doc.documentElement.setAttribute('hash', self.hash)
+			doc.documentElement.setAttribute('user', self.user)
+		return doc
+	def decode(self, doc):
+		if doc.documentElement.hasAttribute('hmac'):
+			e = doc.documentElement.getAttribute('hmac')
+			user = doc.documentElement.getAttribute('user')
+			hash = doc.documentElement.getAttribute('hash')
+			key = self.passmap[user]
+			print 'Verifying with user=%s and password=%s' % (user, key)
+			if e != self._hash(key, self._data(doc)):
+				raise AuthenticationError('Unable to authenticate message')
+		return doc
+		
+class XMLToText(BaseEncoder):
+	def encode(self, doc): return doc.toxml()
+	def decode(self, data): return xml.dom.minidom.parseString(data)
+		
+class XMLEncoder(BaseEncoder):
+	#iter -> xmldoc
+	def format(self, obj): return pickle.dumps(obj)
+	def unformat(self, data): return pickle.loads(str(data))
+	def encode(self, (rootname, handle, typ, payload)):
+		doc = impl.createDocument(None, rootname, None)
+		node = doc.createElement(typ)
+		node.setAttribute('handle', handle)
+		fnode = doc.createTextNode(self.format(payload))
+		node.appendChild(fnode)
+		doc.documentElement.appendChild(node)
+		return doc
+	def decode(self, doc):
+		node = doc.documentElement.firstChild
+		#fro = eval
+		fro = pickle.loads
+		return (str(node.getAttribute('handle')), node.nodeName,
+		  self.unformat(node.firstChild.data))
+		
+class EncoderChain(object):
+	def __init__(self, *encoders):
+		self.encoders, self.decoders = [], []
+		for e in encoders:
+			self.add(e)
+		
+	def add(self, enc):
+		if isinstance(enc, type): enc = enc()
+		self.encoders.append(enc.encode)
+		self.decoders.insert(0, enc.decode)
+		
 	def encode(self, data):
-		return base64.b64encode(data)
+		for f in self.encoders:
+			data = f(data)
+		return data
 		
 	def decode(self, data):
-		return base64.b64decode(data)
-			
-	def pack(self):
-		return self.encode(self.compress(self.doc.toxml())) + '\n'
-		
-	@classmethod
-	def from_packed_xml(cls, msg):
-		msg = msg.strip()
-		self = cls()
-		xmldoc = self.decompress(self.decode(msg)) if msg else ''
-		if xmldoc:
-			self.doc = xml.dom.minidom.parseString(xmldoc)
-		return self
-		
-	def __len__(self):
-		return len(self.doc.documentElement.childNodes)
+		for f in self.decoders:
+			data = f(data)
+		return data
 
-class Request(RPC):
-	_root_name = 'request'
-	def __iter__(self):
-		for node in self.doc.documentElement.childNodes:
-			if node.nodeName == 'call':
-				handle = str(node.getAttribute('handle'))
-				child = node.firstChild
-				func = Transform.to_native(child)
-				yield (handle, func)
-		
-	def append(self, func):
-		node = self.doc.createElement('call')
-		iden = '%08x' % random.getrandbits(32)
-		iden += time.strftime('%Y%m%d%H%M%S',time.gmtime())
-		iden += repr(func)
-		node.setAttribute('handle', hashlib.md5(iden).hexdigest())
-		node.appendChild(Transform.from_native(self.doc, func))
-		self.doc.documentElement.appendChild(node)
+class RPC(EncoderChain):
+	Caps = {
+		'compression': {None: BaseEncoder},
+	}
+	if zlib: Caps['compression']['zlib'] = ZlibEncoder
+	if bz2:  Caps['compression']['bz2'] = BZ2Encoder
 	
-class Response(RPC):
-	_root_name = 'reponse'
-	def append(self, handle, typ, payload):
-		node = self.doc.createElement(typ)
-		node.setAttribute('handle', handle)
-		node.appendChild(Transform.from_native(self.doc, payload))
-		self.doc.documentElement.appendChild(node)
-		
-	def __iter__(self):
-		for node in self.doc.documentElement.childNodes:
-			handle = str(node.getAttribute('handle'))
-			resp = node.nodeName
-			payload = Transform.to_native(node.firstChild)
-			if resp == 'return':
-				yield handle, payload
-			elif resp == 'error':
-				yield handle, Exception(payload)
-
-def getFirstChildElement(node):
-	node = node.firstChild
-	while node.nodeType != node.ELEMENT_NODE:
-		node = node.nextSibling
-	return node
-	
-def getNextSiblingElement(node):
-	node = node.nextSibling
-	while node.nodeType != node.ELEMENT_NODE:
-		node = node.nextSibling
-	return node
+	def __init__(self, compression='zlib', user='', password='', passmap=None, 
+		  digest='sha1'):
+		EncoderChain.__init__(self)
+		self.add(XMLEncoder)
+		self.add(HMacEncoder(user, password, passmap, digest))
+		self.add(XMLToText)
+		comp = self.Caps['compression'].get(compression)
+		self.add(comp(level=9))
+		self.add(Base64Encoder)
 			
+	def encode(self, *args):
+		return EncoderChain.encode(self, args) + '\n'
+		
+	def decode(self, msg):
+		return EncoderChain.decode(self, msg.strip())
+		
+	def make_request(self, func):
+		return self.encode('request',
+		  hashlib.md5('%08x' % random.getrandbits(32) + \
+		  time.strftime('%Y%m%d%H%M%S',time.gmtime()) + \
+		  repr(func)).hexdigest(), 'call', func)
+		  
+	def get_request(self, data):
+		handle, typ, payload = self.decode(data)
+		if typ == 'call':
+			return handle, payload
+		else:
+			raise ValueError('Unknown request type: %r' % typ)
+			
+	def make_response(self, handle, typ, payload):
+		return self.encode('response', handle, typ, payload)
+		
+	def get_response(self, data):
+		handle, typ, payload = self.decode(data)
+		if typ == 'return':
+			return handle, payload
+		elif typ == 'error':
+			return handle, Exception(payload)
+		else:
+			raise ValueError('Unknown response type: %r' % typ)
+
 class Client(object):
-	def __init__(self):
+	def __init__(self, username='', password=''):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		#negotiate capabilities
 		self.wfile = self.sock.makefile('wb')
 		self.rfile = self.sock.makefile('rb')
+		self.rpc = RPC(user=username, password=password)
+		self.username = username
+		self.password = password
 		
 	def connect(self, (host, port)):
 		self.sock.connect((host, port))
@@ -222,53 +196,49 @@ class Client(object):
 	def close(self):
 		self.sock.close()
 	
-	def call_quick(self, f, *args, **kwargs):
+	def __call__(self, f, *args, **kwargs):
 		func = func_def(f, *args, **kwargs)
-		request = Request()
-		request.append(func)
-		for handle, payload in self.call(request):
-			return handle, payload
-		
-	def call(self, request):
-		self.wfile.write(request.pack())
+		request = self.rpc.make_request(func)
+		self.wfile.write(request)
 		self.wfile.flush()
 		line = self.rfile.readline()
 		if line:
-			return iter(Response.from_packed_xml(line))
+			return self.rpc.get_response(line)
 		else:
 			raise EOFError
+	call_quick = __call__
 
 class RequestHandler(SocketServer.StreamRequestHandler):
 	def debug(self, text):
 		print 'Client %s:%s -' % self.client_address, text
 		
+	def setup(self):
+		SocketServer.StreamRequestHandler.setup(self)
+		self.rpc = RPC(passmap=self.server.passmap)
+		
 	def handle(self):
 		self.debug('Connected')
 		while True:
-			request = Request.from_packed_xml(self.rfile.readline())
-			if not request:
+			line = self.rfile.readline().strip()
+			if not line:
 				break
-			resp = Response()
-			for handle, func in request:
-				try:
-					#self.debug('Called ' + str(func))
-					typ = 'return'
-					ret = self.server.on_call(func.name, *func.args, **func.kwargs)
-				except BaseException, e:
-					ret = traceback.format_exc(e)
-					typ = 'error'
-					#self.debug('Error\n' + ret)
-				#else:
-					#self.debug('Returning ' + repr(ret))
-				resp.append(handle, typ, ret)
-			self.wfile.write(resp.pack())
+			handle, func = self.rpc.get_request(line)
+			ret,(t,v,tb) = capture(self.server.on_call,
+			  (func.name, func.args, func.kwargs))
+			if t:
+				self.wfile.write(self.rpc.make_response(handle,
+				  'error', ''.join(traceback.format_exception(t,v,tb))))
+			else:
+				self.wfile.write(self.rpc.make_response(handle,
+				  'return', ret))
 			self.wfile.flush()
 		self.debug('Disconnected')
 		
 class Server(SocketServer.TCPServer):
 	allow_reuse_address = True
-	def __init__(self, address, handler=None):
+	def __init__(self, address, passwords=None, handler=None):
 		SocketServer.TCPServer.__init__(self, address, handler or RequestHandler)
+		self.passmap = passwords or {}
 
 class ThreadingServer(SocketServer.ThreadingMixIn, Server): pass
 
@@ -292,19 +262,48 @@ if __name__=='__main__':
 		print repr(client.call_quick('a', 123, '456', genre='jazz'))
 		print repr(client.call_quick('a', '456', 'apple', genre='classical'))
 	elif sys.argv[1] == 'unittest':
-		test = func_def('test', [{0:u'0'}, 1,'2<int/>',(3.0,{True:5, '6':complex(1,2.5), False:None})])
-		print repr(test)
+		tests = [
+			func_def('testa', [{0:u'0'}, 1,'2<int/>',(3.0,{True:5, '6':complex(1,2.5), False:None})]),
+			func_def('testb', ['a', 'b', 'c'], key='123'),
+		]
+		responses = [
+			('return', (909,'909')),
+			('error', TypeError()),
+		]
+		user = ''
+		user = 'admin'
+		password = 'testpa55w0rd'
 		
-		request = Request()
-		request.append(test)
-		print request.doc.toxml()
+		passmap = {user: password}
+		print repr(tests)
 		
-		sent = request.pack()
+		request = Request(user=user, password=password)
+		for test in tests:
+			request.append(test)
+		sent = request.encode()
+		print 'SEND:', repr(sent)
+		
+		rcvd = Request(passmap=passmap).decode(sent)
+		response = Response()
+		results = []
+		print '  Received request:'
+		for i,(handle, result) in enumerate(rcvd):
+			results.append(result)
+			print i, repr(result)
+			response.append(handle, *responses[i])
+		print
+		assert tests == results
+		
+		sent = response.encode()
 		print repr(sent)
-		rcvd = request.from_packed_xml(sent)
-		print len(request.encode(request.compress(repr(test)))), '/', len(rcvd.doc.toxml()), '/', len(sent)
-		
-		for handle, result in rcvd:
-			break
-		print repr(result)
-		exit(test != result)
+		rcvd = Response().decode(sent)
+		print '  Received response:'
+		for i,(handle, payload) in enumerate(rcvd):
+			if responses[i][0] == 'return':
+				assert responses[i][1] == payload
+				print i, payload
+			elif responses[i][0] == 'error':
+				assert `responses[i][1]` == `payload.args[0]`
+				print i, 'Error:', `payload.args[0]`
+			else:
+				raise ValueError('Unknown response type: %r' % responses[i][0])

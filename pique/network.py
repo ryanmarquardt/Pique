@@ -54,7 +54,7 @@ class NetThread(rpc.ThreadingServer, bgthread.BgThread, PObject):
 		rpc.ThreadingServer.__init__(self, (host, port))
 		self.serve_forever()
 		
-	def on_call(self, name, *args, **kwargs):
+	def on_call(self, name, args, kwargs):
 		if name == 'ping':
 			return None
 		elif name == 'quit':
