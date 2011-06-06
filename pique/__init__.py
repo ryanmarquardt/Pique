@@ -86,16 +86,27 @@ class LockedValue(threading._Event):
 		threading._Event.wait(self, timeout=timeout)
 		return self.value
 
-class CommandMap(threading.Thread, dict):
+class CommandMap(threading.Thread, collections.MutableMapping, PObject):
 	name = 'CommandThread'
 	def __init__(self, d=None):
 		threading.Thread.__init__(self)
-		dict.__init__(self, d)
+		self.__d = dict(d or {})
 		self.daemon = True
 		self._q = Queue.Queue()
 		
 	def __hash__(self):
 		return 1
+		
+	def __getitem__(self, key):
+		return self.__d.__getitem__(key)
+	def __setitem__(self, key, value):
+		self.__d.__setitem__(key, value)
+	def __delitem__(self, key):
+		self.__d.__delitem__(key)
+	def __len__(self):
+		return self.__d.__len__()
+	def __iter__(self):
+		return self.__d.__iter__()
 		
 	def async(self, cmd, *args, **kwargs):
 		func = self[cmd]
@@ -115,15 +126,19 @@ class CommandMap(threading.Thread, dict):
 			raise typ, val, tb
 		
 	def run(self):
-		while True:
-			val = self._q.get()
-			command, args, kwargs, v = val
-			f = lambda:command(*args, **kwargs)
-			state = capture(f)
-			if v is None and state[1] == (None, None, None):
-				print state[1][2]
-			else:
-				v.set(state)
+		try:
+			while True:
+				command, args, kwargs, v = self._q.get()
+				state = capture(lambda:command(*args, **kwargs))
+				if v is None and state[1] == (None, None, None):
+					debug(state[1][2])
+				else:
+					v.set(state)
+		except TypeError:
+			pass
+				
+	def shutdown(self):
+		self._q.put(None)
 			
 class PluginManager(collections.defaultdict):
 	def __init__(self):
