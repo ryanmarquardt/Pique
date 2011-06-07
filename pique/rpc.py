@@ -1,4 +1,31 @@
 #!/usr/bin/env python
+#
+# Copyright (c) 2010, Ryan Marquardt
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without 
+# modification, are permitted provided that the following conditions are
+# met:
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+# 3. Neither the name of the project nor the names of its contributors
+#    may be used to endorse or promote products derived from this software
+#    without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import base64
 import hashlib
@@ -72,7 +99,6 @@ class HMacEncoder(BaseEncoder):
 	def encode(self, doc):
 		data = self._data(doc)
 		if self.user and self.key:
-			print 'Authenticating with user=%s and password=%s' % (self.user,self.key)
 			doc.documentElement.setAttribute('hmac', self._hash(self.key, data))
 			doc.documentElement.setAttribute('hash', self.hash)
 			doc.documentElement.setAttribute('user', self.user)
@@ -83,7 +109,6 @@ class HMacEncoder(BaseEncoder):
 			user = doc.documentElement.getAttribute('user')
 			hash = doc.documentElement.getAttribute('hash')
 			key = self.passmap[user]
-			print 'Verifying with user=%s and password=%s' % (user, key)
 			if e != self._hash(key, self._data(doc)):
 				raise AuthenticationError('Unable to authenticate message')
 		return doc
@@ -227,8 +252,7 @@ class RequestHandler(SocketServer.StreamRequestHandler):
 				self.wfile.write(self.rpc.make_response(handle,
 				  'error', ''.join(traceback.format_exception(t,v,tb))))
 			else:
-				self.wfile.write(self.rpc.make_response(handle,
-				  'return', ret))
+				self.wfile.write(self.rpc.make_response(handle, 'return', ret))
 			self.wfile.flush()
 		self.debug('Disconnected')
 		

@@ -289,9 +289,7 @@ class Library(PObject):
 
 Attempt to import the media at uri into the library. Returns the background
 job id number.'''
-		r = self.player.scan_uri(path)
-		#self.jobsmanager.submit(self.player.normalize_uri, path)
-		return r
+		return self.jobsmanager.submit(self.player.normalize_uri, path)
 		
 	def remove(self, uri):
 		'''remove(uri) -> None

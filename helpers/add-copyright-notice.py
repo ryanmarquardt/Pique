@@ -2,7 +2,7 @@
 
 import sys
 
-copyright = open('COPYRIGHT').readlines()
+copyright = open('COPYING').readlines()
 notice = '#\n' + ''.join(['# '+l for l in copyright])
 for path in sys.argv[1:]:
 	fil = open(path).read()
