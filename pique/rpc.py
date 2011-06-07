@@ -106,8 +106,6 @@ class XMLEncoder(BaseEncoder):
 		return doc
 	def decode(self, doc):
 		node = doc.documentElement.firstChild
-		#fro = eval
-		fro = pickle.loads
 		return (str(node.getAttribute('handle')), node.nodeName,
 		  self.unformat(node.firstChild.data))
 		
@@ -156,10 +154,10 @@ class RPC(EncoderChain):
 		return EncoderChain.decode(self, msg.strip())
 		
 	def make_request(self, func):
-		return self.encode('request',
-		  hashlib.md5('%08x' % random.getrandbits(32) + \
-		  time.strftime('%Y%m%d%H%M%S',time.gmtime()) + \
-		  repr(func)).hexdigest(), 'call', func)
+		handle = hashlib.md5('%08x' % random.getrandbits(32) + \
+		  time.strftime('%Y%m%d%H%M%S',time.gmtime()) #+ repr(func)
+		  ).hexdigest()
+		return self.encode('request', handle, 'call', func)
 		  
 	def get_request(self, data):
 		handle, typ, payload = self.decode(data)
