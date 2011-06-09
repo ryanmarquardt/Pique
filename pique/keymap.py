@@ -30,10 +30,9 @@
 from common import *
 
 class KeyMap(dict):
-	#dependencies = ('commandmap',)
 	def __init__(self, items):
 		self.keys = dict((str(k).lower(),v) for k,v in items)
-		self.keys['eof'] = 'quit'
+		self.keys['<control>d'] = 'quit'
 		self.failures = set()
 		self.dependencies = {'commandmap': self.on_set_commandmap}
 	
@@ -45,9 +44,8 @@ class KeyMap(dict):
 		
 	def interpret(self, key):
 		key = key.lower()
-		try:
-			cmd = self.keys[key]
-		except KeyError:
+		cmd = self.keys.get(key, None)
+		if cmd is None:
 			if key not in self.failures:
 				self.failures.add(key)
 				debug('No key binding for', repr(key))
