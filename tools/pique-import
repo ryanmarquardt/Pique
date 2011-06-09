@@ -35,7 +35,7 @@ import sys
 from pique.common import *
 
 def find(path='.'):
-	return list(itertools.chain(*[find(x) if os.path.isdir(x) else (x,) for x in map(lambda x:os.path.join(path,x),os.listdir(path))]))
+	return list(itertools.chain(*[find(x) if os.path.isdir(x) else (x,) for x in map(lambda x:os.path.join(path,x),os.listdir(path))])) if os.path.isdir(path) else [path]
 
 parser = optparse.OptionParser()
 pique.client.add_default_options(parser)
