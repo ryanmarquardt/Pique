@@ -33,14 +33,18 @@ import sys
 import termios
 import threading
 
+Shift = '<shift>'
+Alt = '<alt>'
+Control = '<control>'
+
 MODS = (
-	(';2','<shift>'),
-	(';3','<alt>'),
-	(';4','<shift><alt>'),
-	(';5','<control>'),
-	(';6','<shift><control>'),
-	(';7','<control><alt>'),
-	(';8','<control><shift><alt>'),
+	(';2',Shift),
+	(';3',Alt),
+	(';4',Shift+Alt),
+	(';5',Control),
+	(';6',Shift+Control),
+	(';7',Control+Alt),
+	(';8',Control+Shift+Alt),
 )
 
 Sequences = {
@@ -67,13 +71,17 @@ Sequences = {
 }
 for k,v in Sequences.items():
 	pre,post = k[:-1],k[-1]
-	if pre[-1] == '[':
+	if pre[-1] in '[O':
 		pre += '1'
 	for n,t in MODS:
 		Sequences[pre+n+post] = t + v
 
-for c in range(1,27):
-	Sequences[chr(c)] = '<control>' + chr(c + ord('a') - 1)
+for c in range(26):
+	l = chr(c + ord('a'))
+	Sequences[chr(c+1)] = Control + l
+	Sequences['\x1b'+l] = Alt + l
+for c in """,./;'[]\=-0987654321`<>?:"{}|+_)(*&^%$#@!~""":
+	Sequences['\x1b'+c] = Alt + c
 
 Sequences.update({
 	'\x1b': 'escape',
@@ -81,7 +89,11 @@ Sequences.update({
 	'\x1bOF': 'end',
 	'\x7f': 'bksp',
 	'\t': 'tab',
-	'\x1b[Z': '<shift>tab',
+	'\x1b[Z': Shift+'tab',
+	'\x1f': Control+'/',
+	'\x1e': Control+'6',
+	'\x1d': Control+']',
+	'\x00': Control+'2',
 	'\n': 'enter',
 	'\r': 'linefeed',
 	' ': 'space',
@@ -109,7 +121,14 @@ class basetty(object):
 			self.old = None
 		self.fd = fd
 		self.echo = echo
-		self.names = names
+		self.names = {}
+		for n in names:
+			t,k = self.names,''
+			for c in n:
+				k += c
+				t = t.setdefault(k,{})
+			t[n] = names[n]
+		self._overflow = ''
 		self.quit = quit
 		self.__setattr = termios.tcsetattr
 		self.__drain = termios.TCSADRAIN
@@ -125,27 +144,33 @@ class basetty(object):
 	def __exit__(self, type, value, traceback):
 		if self.old:
 			self.__setattr(self.fd.fileno(), self.__drain, self.old)
+			
+	def getch(self):
+		seq,self._overflow = self._overflow,''
+		while True:
+			possible = self.names
+			try:
+				if seq:
+					possible = possible[seq]
+				while possible and possible.keys() != [seq]:
+					seq += self._getch()
+					possible = possible[seq]
+			except TimedOut:
+				pass
+			except KeyError:
+				if len(seq) > 1:
+					seq,self._overflow = seq[:-1],seq[-1]
+			if seq:
+				r = possible.get(seq,seq)
+				if self.quit == r:
+					raise EOF
+				return r
 		
 	def __iter__(self):
 		with self:
-			extra = ''
-			keys = self.names.keys()
 			while True:
-				seq, extra = extra, ''
-				possible = filter(lambda x:x.startswith(seq), keys)
-				try:
-					while possible and possible != [seq]:
-						seq += self._getch()
-						possible = filter(lambda x:x.startswith(seq), possible)
-				except TimedOut:
-					pass
-				if not possible and len(seq) > 1:
-					seq, extra = seq[:-1], seq[-1]
-				if seq:
-					yield self.names.get(seq,seq)
-					if self.quit and seq == self.quit:
-						raise EOF
-						
+				yield self.getch()
+		
 	def shutdown(self):
 		self.__exit__(None, None, None)
 						
@@ -205,7 +230,7 @@ class threadtty(basetty, threading.Thread):
 		basetty.shutdown(self)
 	
 if __name__=='__main__':
-	rawtty = threadtty(Sequences, timeout=1)
+	rawtty = threadtty(Sequences, timeout=1, quit=Control+'d')
 	def thrd():
 		try:
 			while True:
@@ -213,6 +238,8 @@ if __name__=='__main__':
 					print repr(key)
 		except KeyboardInterrupt:
 			print 'KeyboardInterrupt'
+		except EOF:
+			print 'EOF'
 	import threading
 	t = threading.Thread(target=thrd)
 	t.start()
